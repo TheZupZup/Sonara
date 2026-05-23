@@ -32,7 +32,8 @@ class LibraryController extends Notifier<LibraryState> {
       final tracks = await source.fetchTracks();
       final albums = await source.fetchAlbums();
       final artists = await source.fetchArtists();
-      await ref.read(musicLibraryRepositoryProvider).upsertCatalog(
+      final repository = ref.read(musicLibraryRepositoryProvider);
+      await repository.upsertCatalog(
         sourceId: source.id,
         tracks: tracks,
         albums: albums,
