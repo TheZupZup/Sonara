@@ -51,7 +51,10 @@ class _NowPlaying extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
+        // The now-playing block keeps the larger share so the controls stay
+        // on screen even when the queue list is shown beneath it.
         Expanded(
+          flex: 2,
           child: Center(
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(AppSpacing.xl),
