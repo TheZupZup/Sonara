@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../../models/jellyfin_session.dart';
+import '../../models/lyrics.dart';
 import 'jellyfin_api.dart';
 import 'jellyfin_auth_header.dart';
 import 'jellyfin_client.dart';
@@ -150,6 +151,97 @@ class HttpJellyfinClient implements JellyfinClient {
       statusCode: response.statusCode,
       contentType: response.headers['content-type'],
     );
+  }
+
+  @override
+  Future<Lyrics?> fetchLyrics(JellyfinSession session, String itemId) async {
+    final Uri uri = Uri.parse('${session.baseUrl}/Audio/$itemId/Lyrics');
+    final http.Response response = await _send(
+      () => _client.get(uri, headers: _authHeaders(session)),
+    );
+    // No lyrics on the server is a normal outcome, not an error.
+    if (response.statusCode == 404) return null;
+    _checkStatus(response);
+    return _parseLyrics(_decodeObject(response));
+  }
+
+  @override
+  Future<Set<String>> fetchFavoriteIds(JellyfinSession session) async {
+    final Uri uri = Uri.parse('${session.baseUrl}/Items').replace(
+      queryParameters: <String, String>{
+        'UserId': session.userId,
+        'Recursive': 'true',
+        'IncludeItemTypes': 'Audio',
+        'Filters': 'IsFavorite',
+        'EnableImages': 'false',
+      },
+    );
+    final http.Response response = await _send(
+      () => _client.get(uri, headers: _authHeaders(session)),
+    );
+    _checkStatus(response);
+    final Map<String, dynamic> json = _decodeObject(response);
+    final Object? rawItems = json['Items'];
+    if (rawItems is! List) return <String>{};
+    final Set<String> ids = <String>{};
+    for (final Object? entry in rawItems) {
+      if (entry is Map<String, dynamic>) {
+        final Object? id = entry['Id'];
+        if (id is String && id.isNotEmpty) ids.add(id);
+      }
+    }
+    return ids;
+  }
+
+  @override
+  Future<void> setFavorite(
+    JellyfinSession session,
+    String itemId, {
+    required bool favorite,
+  }) async {
+    final Uri uri = Uri.parse(
+      '${session.baseUrl}/Users/${session.userId}/FavoriteItems/$itemId',
+    );
+    final Map<String, String> headers = _authHeaders(session);
+    final http.Response response = await _send(
+      () => favorite
+          ? _client.post(uri, headers: headers)
+          : _client.delete(uri, headers: headers),
+    );
+    _checkStatus(response);
+  }
+
+  /// The standard headers for an authenticated JSON call: the token rides in the
+  /// `Authorization` header (built in one place, never logged).
+  Map<String, String> _authHeaders(JellyfinSession session) {
+    return <String, String>{
+      'Accept': 'application/json',
+      'Authorization':
+          JellyfinAuthHeader.forToken(session.deviceId, session.accessToken),
+    };
+  }
+
+  /// Parses Jellyfin's `/Audio/<id>/Lyrics` body into [Lyrics], or `null` when
+  /// it carries no usable lines. Each entry is `{ "Text": "…", "Start": <ticks>
+  /// }`, where `Start` is in 100-nanosecond ticks (synced) or absent (plain).
+  static Lyrics? _parseLyrics(Map<String, dynamic> json) {
+    final Object? raw = json['Lyrics'];
+    if (raw is! List) return null;
+    final List<LyricLine> lines = <LyricLine>[];
+    for (final Object? entry in raw) {
+      if (entry is! Map<String, dynamic>) continue;
+      final Object? text = entry['Text'];
+      if (text is! String) continue;
+      final int? ticks = (entry['Start'] as num?)?.toInt();
+      lines.add(LyricLine(
+        text: text,
+        start: (ticks != null && ticks >= 0)
+            ? Duration(microseconds: ticks ~/ 10)
+            : null,
+      ));
+    }
+    if (lines.isEmpty) return null;
+    return Lyrics(lines: lines);
   }
 
   /// Builds the listing URL for [kind]. Artists have their own endpoint in

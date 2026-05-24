@@ -1,13 +1,18 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app/linthra_app.dart';
 import 'core/services/linthra_audio_handler.dart';
 import 'data/repositories/download_repository_provider.dart';
+import 'data/repositories/favorites_repository_provider.dart';
 import 'data/repositories/jellyfin_session_store_provider.dart';
 import 'data/repositories/music_library_repository_provider.dart';
 import 'data/repositories/selected_music_folder_repository_provider.dart';
 import 'features/downloads/download_providers.dart';
+import 'features/player/favorites_providers.dart';
+import 'features/player/lyrics_providers.dart';
 import 'features/player/player_providers.dart';
 import 'features/settings/jellyfin/jellyfin_settings_controller.dart';
 
@@ -34,6 +39,9 @@ Future<void> main() async {
       jellyfinRemoteTrackDownloaderOverride,
       currentlyPlayingTrackIdOverride,
       secureJellyfinSessionStoreOverride,
+      sharedPreferencesFavoritesStoreOverride,
+      jellyfinFavoritesOverride,
+      jellyfinLyricsOverride,
     ],
   );
 
@@ -44,6 +52,12 @@ Future<void> main() async {
     container.read(playbackControllerProvider),
     container.read(musicLibraryRepositoryProvider),
   );
+
+  // Start the upcoming-track preloader: as playback advances it warms the next
+  // queued tracks into the offline cache (under the same limit, honouring
+  // "Wi-Fi only" and the preload preference). Instantiating it wires the
+  // listener; it has no value the UI reads.
+  container.read(playbackPreloaderProvider);
 
   // Warm the persisted Jellyfin session before the first frame so a synced
   // remote track can stream on the first tap — without it, playback would race
@@ -58,6 +72,11 @@ Future<void> main() async {
   } catch (_) {
     // Ignore: the user can still connect in Settings.
   }
+
+  // With the session loaded, pull the user's Jellyfin favourites so the heart
+  // reflects the server from the first frame. Best-effort and offline-tolerant:
+  // the repository swallows failures and keeps any locally stored favourites.
+  unawaited(container.read(favoritesRepositoryProvider).refreshFromRemote());
 
   runApp(
     UncontrolledProviderScope(

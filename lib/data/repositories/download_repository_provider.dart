@@ -10,6 +10,7 @@ import '../../core/services/connectivity_service.dart';
 import '../../core/services/offline_cache_manager.dart';
 import '../../core/services/optimistic_connectivity_service.dart';
 import '../../core/services/remote_track_downloader.dart';
+import '../../core/services/track_prefetcher.dart';
 import 'cache_download_repository.dart';
 import 'file_system_offline_file_store.dart';
 import 'in_memory_download_preferences.dart';
@@ -90,6 +91,14 @@ final downloadRepositoryProvider = Provider<DownloadRepository>((ref) {
 /// backed by the *same* instance as [downloadRepositoryProvider] so a cleared
 /// or pinned track stays consistent with download status.
 final offlineCacheManagerProvider = Provider<OfflineCacheManager>((ref) {
+  return ref.watch(_cacheDownloadRepositoryProvider);
+});
+
+/// The preload surface (warm an upcoming track ahead of play), backed by the
+/// *same* instance as [downloadRepositoryProvider] so preloads share the one
+/// cache limit and eviction policy with user downloads. Driven by the
+/// `PlaybackPreloader`, never by the UI directly.
+final trackPrefetcherProvider = Provider<TrackPrefetcher>((ref) {
   return ref.watch(_cacheDownloadRepositoryProvider);
 });
 

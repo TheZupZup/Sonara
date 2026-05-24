@@ -214,7 +214,7 @@ void main() {
       expect(find.text("Couldn't play this track"), findsNothing);
     });
 
-    testWidgets('shows the Lyrics empty state', (tester) async {
+    testWidgets('shows the Lyrics empty state with no source', (tester) async {
       await _pumpScreen(tester, _playing());
 
       // The entry point is visible on the player.
@@ -223,8 +223,24 @@ void main() {
       await tester.tap(find.byTooltip('Lyrics'));
       await tester.pumpAndSettle();
 
-      // No lyrics source yet, so it shows a calm placeholder rather than blank.
-      expect(find.text('No lyrics available yet.'), findsOneWidget);
+      // The default lyrics backend returns none (local track, no Jellyfin), so
+      // it shows a calm placeholder rather than a blank sheet.
+      expect(find.text('No lyrics available'), findsOneWidget);
+    });
+
+    testWidgets('the favorite button toggles the heart', (tester) async {
+      await _pumpScreen(tester, _playing());
+
+      // Starts unfavorited: outline heart, "Favorite" tooltip.
+      expect(find.byTooltip('Favorite'), findsOneWidget);
+      expect(find.byIcon(Icons.favorite_border), findsOneWidget);
+
+      await tester.tap(find.byTooltip('Favorite'));
+      await tester.pumpAndSettle();
+
+      // Now favorited: filled heart, updated tooltip (local-only default store).
+      expect(find.byTooltip('Remove from favorites'), findsOneWidget);
+      expect(find.byIcon(Icons.favorite), findsOneWidget);
     });
 
     testWidgets('reacts to state pushed on the stream', (tester) async {

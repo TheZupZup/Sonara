@@ -713,7 +713,7 @@ The notification channel id/name are configured in `connectMediaSession`
 - Lock-screen / car artwork depends on `Track.artworkUri`, which local scanning
   does not populate yet.
 
-### Now Playing controls — shuffle, repeat & casting
+### Now Playing controls — shuffle, repeat, favorite, lyrics & casting
 
 The Now Playing screen drives every transport action through
 `PlaybackController`/`PlaybackState`; the widgets hold no playback logic of their
@@ -735,6 +735,20 @@ own.
   start, without re-resolving its URL — so a stream isn't re-fetched each loop).
   Next/previous keep working normally in every mode. The glyph switches to
   `repeat_one` for repeat-one and is tinted/selected whenever repeat is active.
+- **Favorite (working).** The heart toggles a favourite through a
+  `FavoritesRepository`. For a **Jellyfin** track the change is synced to the
+  server (`POST`/`DELETE …/FavoriteItems/<id>`), so it follows the user across
+  clients; for a **local** track it's stored on-device. Either way the UI updates
+  optimistically from a single favourite-id set, and a failed server push keeps
+  the local intent and reconciles on the next refresh (the signed-in user's
+  server favourites are pulled at startup). Only non-secret ids are stored or
+  sent — never a token.
+- **Lyrics (working for Jellyfin).** The lyrics button fetches the track's
+  lyrics from the signed-in Jellyfin server (`GET /Audio/<id>/Lyrics`) behind a
+  `LyricsService` seam and shows the lines in a sheet. A track with no lyrics, a
+  local track, or being signed out shows a calm "No lyrics available" placeholder
+  (and a fetch failure a friendly "couldn't load" line) — never a blank sheet. A
+  local `.lrc`/tag reader can slot in behind the same seam later.
 - **Cast / Chromecast — UI placeholder with architecture seam (not live yet).**
   A cast control sits in the Now Playing header. **Casting is *not* implemented
   in this build** and the app never pretends otherwise: the shipped
@@ -870,24 +884,28 @@ user-controlled**:
   failing opaquely.
 - **The cache stays under a size limit.** You set a maximum (presets of 1, 2, 4,
   8, 16 GB or a custom value; **4 GB by default**), so Linthra never fills your
-  phone unexpectedly. When a new download would exceed the limit, it frees space
-  by removing the **least-recently-played, unpinned, not-currently-playing**
-  tracks first. Pin a track ("Keep offline") to protect it. If nothing safe can
-  be freed, the download is refused with a friendly "not enough cache space"
-  message instead of deleting something you wanted.
+  phone unexpectedly. Both your downloads **and** any preloaded upcoming tracks
+  (see below) count toward this one limit. When a new download would exceed it,
+  space is freed by removing **preloaded tracks first**, then the
+  **least-recently-played, unpinned, not-currently-playing** downloads. Pin a
+  track ("Keep offline") to protect it. If nothing safe can be freed, the
+  download is refused with a friendly "not enough cache space" message instead of
+  deleting something you wanted.
 
 **How it works now.** Each Library row shows an offline-download control:
 download an absent track, see a spinner while it's in flight, remove a cached
 one, or retry a failed one. The **Downloads** tab lists everything currently
 cached — with each track's **size** and a **Keep offline** pin — shows how much
-of the limit is in use, and hosts the **Wi-Fi only** toggle. **Settings →
+of the limit is in use, and hosts the **Wi-Fi only** and **Preload upcoming
+tracks** toggles. **Settings →
 Offline cache** shows used / max / free space and the **Change limit** and
 **Clear cache** (clear unpinned, or clear all) actions. The download lifecycle
 flows through `DownloadRepository`, which centralizes three guarantees:
 
-- **User-initiated only.** A track's status only ever changes in response to an
-  explicit download/remove action — nothing is fetched automatically or in the
-  background.
+- **Downloads are user-initiated.** A track's *download status* only ever changes
+  in response to an explicit download/remove action. (Preloading, below, also
+  caches bytes automatically — but a preloaded track never takes on a download
+  status, never shows as a download, and is evicted before any download.)
 - **Source-aware.** A **Jellyfin** track has its bytes fetched (via
   `RemoteTrackDownloader` → `JellyfinTrackDownloader`) and written to an
   app-private offline directory (`OfflineFileStore`); an **on-device** track is
@@ -896,6 +914,22 @@ flows through `DownloadRepository`, which centralizes three guarantees:
 - **Wi-Fi only is respected.** For remote downloads, with the toggle on a request
   made off Wi-Fi is *queued* instead of run; with it off, downloads proceed on
   any connection. (Local tracks are never queued — there are no bytes to fetch.)
+
+**Preloading upcoming tracks.** As playback moves, Linthra warms the next few
+queued tracks into the same cache ahead of time, so the upcoming songs start
+instantly (and play offline) instead of buffering a fresh stream at each track
+change. A `PlaybackPreloader` watches `PlaybackState` and, when the playing
+track changes, asks a `TrackPrefetcher` (the `CacheDownloadRepository` again) to
+cache the next few `upNext` entries — which is the **queue order** in normal
+playback and the **shuffled order** when shuffle is on, since the controller
+keeps `upNext` in effective play order. It is deliberately well-behaved: only
+remote, not-yet-cached tracks are fetched; it **honours "Wi-Fi only"** (skipping
+rather than queueing off Wi-Fi); it stays under the cache limit and **evicts
+preloads before any download**; a preload that won't fit or fails is silently
+skipped (the track still streams when reached); and it never blocks or
+interrupts what's playing. Preloaded tracks count toward cache usage but never
+appear as downloads. Toggle it off with **Downloads → Preload upcoming tracks**
+(on by default).
 
 **Storage & playback.** Downloaded bytes live in an app-controlled directory
 (`path_provider`'s application-support location, not the OS cache that can be
@@ -942,10 +976,11 @@ Deliberate gaps the next PRs will close:
   out of scope for this PR. The seam is ready — `requestDownload(Track)` plus the
   `RemoteTrackDownloader` compose per-track — so a batch action is additive UI
   over the existing policy, with no architectural change.
-- **No background download manager.** Downloads run inline in response to the
-  tap; there is no worker, no Android download/notification service, no resume of
-  a partial transfer, and no auto-flush of the queue when Wi-Fi returns (re-tap a
-  queued track to retry).
+- **No background download manager.** Downloads (and preloads) run inline; there
+  is no worker, no Android download/notification service, no resume of a partial
+  transfer, and no auto-flush of the queue when Wi-Fi returns (re-tap a queued
+  track to retry). Preloading runs as a foreground side effect of playback, not a
+  scheduled background job.
 - **Eviction is inline, not a background sweeper.** Space is freed only when a
   new download needs it (and stale metadata only on load); there is no periodic
   reconciliation against the directory's actual on-disk size, and a remote track
@@ -1066,8 +1101,9 @@ tokenized URL).
 - **Direct play only (no transcoding fallback yet).** Streaming serves the
   original file (`static=true`), which the engine decodes for the common
   containers; a server-side transcode fallback for exotic formats is deferred.
-- **No Android Auto browsing, lyrics, or sync-conflict handling** for Jellyfin
-  in this foundation.
+- **No Android Auto browsing or sync-conflict handling** for Jellyfin in this
+  foundation. (Lyrics and favourites now sync from Jellyfin — see **Now Playing
+  controls** above.)
 
 ## Continuous integration
 
@@ -1130,12 +1166,13 @@ branch rather than `main`.
 10. Settings
 
 Later: Jellyfin (landed — settings, auth, encrypted session, a library source,
-Library sync, streaming playback, and explicit per-track offline downloads;
+Library sync, streaming playback, explicit per-track offline downloads,
+preloading of upcoming tracks, server-synced favourites, and lyrics;
 album/playlist "download all" and a background download manager next), Android
 Auto (foundation landed — browsable Library/Queue; album/artist grouping and
 search next), Chromecast/casting (UI + `CastService` architecture seam landed;
-live device discovery and playback handoff next), WebDAV, NAS, lyrics,
-ReplayGain, MPRIS, smart playlists, and more.
+live device discovery and playback handoff next), WebDAV, NAS, local-file lyrics
+(`.lrc`/tags), ReplayGain, MPRIS, smart playlists, and more.
 
 ## F-Droid metadata (work in progress)
 

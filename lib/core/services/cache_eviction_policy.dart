@@ -28,9 +28,11 @@ class EvictionPlan {
 ///    are never evicted (they hold no app-managed bytes).
 ///  - The currently playing track is never evicted.
 ///  - Pinned ("Keep offline") tracks are never evicted.
-///  - Among the rest, least-recently-used goes first (oldest [CachedTrack.
-///    lastAccessedAt]; never-played counts as oldest), tie-broken by oldest
-///    [CachedTrack.cachedAt] then track id for determinism.
+///  - Auto-preloaded tracks go before any user download: a prefetched copy is a
+///    convenience, so it's sacrificed first to keep what the user chose to keep.
+///  - Among entries of the same kind, least-recently-used goes first (oldest
+///    [CachedTrack.lastAccessedAt]; never-played counts as oldest), tie-broken by
+///    oldest [CachedTrack.cachedAt] then track id for determinism.
 ///  - If even evicting every eligible track wouldn't make room, nothing is
 ///    evicted and the plan reports it doesn't fit.
 class CacheEvictionPolicy {
@@ -82,6 +84,8 @@ class CacheEvictionPolicy {
   }
 
   static int _leastRecentlyUsedFirst(CachedTrack a, CachedTrack b) {
+    // Auto-preloaded entries are evicted before any user download.
+    if (a.preloaded != b.preloaded) return a.preloaded ? -1 : 1;
     final int byAccess = _compareNullableOldestFirst(
       a.lastAccessedAt,
       b.lastAccessedAt,

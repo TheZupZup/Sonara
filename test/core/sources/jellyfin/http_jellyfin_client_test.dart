@@ -370,4 +370,83 @@ void main() {
       );
     });
   });
+
+  group('fetchLyrics', () {
+    test('parses synced + plain lines and targets the lyrics endpoint',
+        () async {
+      http.Request? captured;
+      final client = _client(MockClient((http.Request request) async {
+        captured = request;
+        return http.Response(
+          jsonEncode(<String, dynamic>{
+            'Lyrics': <Map<String, dynamic>>[
+              <String, dynamic>{'Text': 'First line', 'Start': 10000000},
+              <String, dynamic>{'Text': 'Second line'},
+            ],
+          }),
+          200,
+          headers: <String, String>{'content-type': 'application/json'},
+        );
+      }));
+
+      final lyrics = await client.fetchLyrics(_session, 'item-7');
+
+      expect(captured!.method, 'GET');
+      expect(captured!.url.path, '/Audio/item-7/Lyrics');
+      expect(
+        lyrics!.lines.map((line) => line.text),
+        <String>['First line', 'Second line'],
+      );
+      // 10,000,000 ticks (100-ns units) is exactly one second.
+      expect(lyrics.lines.first.start, const Duration(seconds: 1));
+      expect(lyrics.lines.last.start, isNull);
+      expect(lyrics.isSynced, isTrue);
+    });
+
+    test('returns null when the server has no lyrics (404)', () async {
+      final client = _client(MockClient((_) async => http.Response('', 404)));
+
+      expect(await client.fetchLyrics(_session, 'item-7'), isNull);
+    });
+  });
+
+  group('favorites', () {
+    test('fetchFavoriteIds lists favourite audio item ids', () async {
+      http.Request? captured;
+      final client = _client(MockClient((http.Request request) async {
+        captured = request;
+        return http.Response(
+          jsonEncode(<String, dynamic>{
+            'Items': <Map<String, dynamic>>[
+              <String, dynamic>{'Id': 'a'},
+              <String, dynamic>{'Id': 'b'},
+            ],
+          }),
+          200,
+          headers: <String, String>{'content-type': 'application/json'},
+        );
+      }));
+
+      final ids = await client.fetchFavoriteIds(_session);
+
+      expect(ids, <String>{'a', 'b'});
+      expect(captured!.url.queryParameters['Filters'], 'IsFavorite');
+    });
+
+    test('setFavorite POSTs to mark and DELETEs to clear', () async {
+      final List<http.Request> requests = <http.Request>[];
+      final client = _client(MockClient((http.Request request) async {
+        requests.add(request);
+        return http.Response('', 200);
+      }));
+
+      await client.setFavorite(_session, 'item-7', favorite: true);
+      await client.setFavorite(_session, 'item-7', favorite: false);
+
+      expect(requests[0].method, 'POST');
+      expect(requests[0].url.path, '/Users/user-1/FavoriteItems/item-7');
+      expect(requests[1].method, 'DELETE');
+      expect(requests[1].url.path, '/Users/user-1/FavoriteItems/item-7');
+    });
+  });
 }

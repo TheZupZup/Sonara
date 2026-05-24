@@ -9,6 +9,7 @@ import '../../core/services/cache_eviction_policy.dart';
 import '../../core/services/connectivity_service.dart';
 import '../../core/services/offline_cache_manager.dart';
 import '../../core/services/remote_track_downloader.dart';
+import '../../core/services/track_prefetcher.dart';
 
 /// The app's [DownloadRepository] *and* [OfflineCacheManager]: it owns the
 /// offline-cache *policy* in one place and delegates the moving parts to focused
@@ -17,9 +18,11 @@ import '../../core/services/remote_track_downloader.dart';
 /// the (pure) eviction decision to a [CacheEvictionPolicy].
 ///
 /// Promises enforced here so a caller can't skip them:
-///  - **User-initiated only.** Nothing is ever downloaded automatically; status
-///    changes happen solely in response to [requestDownload] / [removeDownload]
-///    (or an explicit clear / pin).
+///  - **Downloads are user-initiated.** A track's download *status* changes only
+///    in response to [requestDownload] / [removeDownload] (or an explicit clear /
+///    pin). Auto-*preloaded* tracks ([prefetch]) are cached ahead of play too,
+///    but they never take on a user-download status: they stay invisible to the
+///    downloads UI, count toward the limit, and are the first to be evicted.
 ///  - **Source-aware.** A remote (Jellyfin) track has its bytes fetched and
 ///    written to the offline directory; an on-device track is already local, so
 ///    it's recorded as available offline with no fetch and no managed file.
@@ -43,7 +46,7 @@ import '../../core/services/remote_track_downloader.dart';
 /// id-derived file name, the source's URI scheme, a byte size, timestamps, and
 /// the pinned flag — never a token or URL.
 class CacheDownloadRepository
-    implements DownloadRepository, OfflineCacheManager {
+    implements DownloadRepository, OfflineCacheManager, TrackPrefetcher {
   CacheDownloadRepository({
     required DownloadStore store,
     required OfflineFileStore files,
@@ -116,7 +119,11 @@ class CacheDownloadRepository
       } else {
         _downloads[cached.trackId] = cached;
       }
-      _statuses[cached.trackId] = DownloadStatus.downloaded;
+      // A preloaded entry is cached and playable, but never a *download*: it
+      // stays out of the status map so the downloads UI doesn't show it.
+      if (!cached.preloaded) {
+        _statuses[cached.trackId] = DownloadStatus.downloaded;
+      }
     }
     if (changed) await _save();
     _loaded = true;
@@ -144,6 +151,20 @@ class CacheDownloadRepository
     // by contrast, is fair game for an explicit retry.
     if (current == DownloadStatus.downloaded ||
         current == DownloadStatus.downloading) {
+      return;
+    }
+
+    // A track that was preloaded ahead of play is already cached: promote it to
+    // a user download in place, without re-fetching its bytes.
+    final CachedTrack? preloadedEntry = _downloads[track.id];
+    if (preloadedEntry != null &&
+        preloadedEntry.preloaded &&
+        preloadedEntry.isManaged) {
+      _downloads[track.id] = preloadedEntry.copyWith(preloaded: false);
+      await _save();
+      _statuses[track.id] = DownloadStatus.downloaded;
+      _emitStatus();
+      _emitCache();
       return;
     }
 
@@ -184,10 +205,18 @@ class CacheDownloadRepository
     }
   }
 
-  /// Writes a freshly fetched remote download, evicting first to stay under the
-  /// limit. Throws [CacheStorageException] (after resetting status) when it
-  /// can't fit even after evicting everything safe to remove.
-  Future<void> _cacheRemote(Track track, RemoteTrackData data) async {
+  /// Writes a freshly fetched remote track's bytes, evicting first to stay under
+  /// the limit. A user download ([preloaded] `false`) takes on the `downloaded`
+  /// status; a [preloaded] one is cached but stays out of the status map.
+  ///
+  /// Throws [CacheStorageException] (after resetting status) when a user
+  /// download can't fit even after evicting everything safe to remove; a preload
+  /// that can't fit returns quietly (it's best-effort).
+  Future<void> _cacheRemote(
+    Track track,
+    RemoteTrackData data, {
+    bool preloaded = false,
+  }) async {
     final int incoming = data.bytes.length;
     final int maxBytes = await _preferences.maxCacheBytes();
     final EvictionPlan plan = _policy.plan(
@@ -199,14 +228,16 @@ class CacheDownloadRepository
     );
 
     if (!plan.fits) {
+      if (preloaded) return;
       _set(track.id, DownloadStatus.notDownloaded);
       throw const CacheStorageException();
     }
 
+    bool evictedAStatus = false;
     for (final CachedTrack victim in plan.evict) {
       await _deleteManagedFile(victim);
       _downloads.remove(victim.trackId);
-      _statuses.remove(victim.trackId);
+      if (_statuses.remove(victim.trackId) != null) evictedAStatus = true;
     }
 
     final String fileName = await _files.write(
@@ -221,12 +252,39 @@ class CacheDownloadRepository
       sourceType: _sourceTypeOf(track),
       sizeBytes: incoming,
       cachedAt: now,
-      lastAccessedAt: now,
+      // A preload hasn't been played yet, so it has no access time — which also
+      // keeps it ahead of played tracks of its own kind in eviction order.
+      lastAccessedAt: preloaded ? null : now,
+      preloaded: preloaded,
     );
     await _save();
-    _statuses[track.id] = DownloadStatus.downloaded;
-    _emitStatus();
+    if (!preloaded) {
+      _statuses[track.id] = DownloadStatus.downloaded;
+    }
+    // A preload changes only cache usage; a user download (or an eviction that
+    // dropped a download) also changes download status.
+    if (!preloaded || evictedAStatus) _emitStatus();
     _emitCache();
+  }
+
+  @override
+  Future<void> prefetch(Track track) async {
+    await _ensureLoaded();
+    // Only remote tracks have bytes to fetch; local ones are already on disk.
+    if (!_downloader.isRemote(track)) return;
+    // Already cached (download or earlier preload) or in flight — skip.
+    if (_downloads.containsKey(track.id)) return;
+    if (_statuses[track.id] == DownloadStatus.downloading) return;
+    // Preload is best-effort and network-heavy, so it honours "Wi-Fi only" and
+    // simply skips (rather than queueing) when it can't run right now.
+    if (!await _allowedToDownloadNow()) return;
+    try {
+      final RemoteTrackData data = await _downloader.fetch(track);
+      await _cacheRemote(track, data, preloaded: true);
+    } catch (_) {
+      // Best-effort: a failed preload caches nothing and changes no status; the
+      // track still streams normally when it's reached.
+    }
   }
 
   @override

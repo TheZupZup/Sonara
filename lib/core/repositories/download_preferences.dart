@@ -19,4 +19,11 @@ abstract interface class DownloadPreferences {
   Future<int> maxCacheBytes();
 
   Future<void> setMaxCacheBytes(int bytes);
+
+  /// Whether upcoming queued tracks are preloaded into the cache ahead of play.
+  /// Defaults to `true`. Preloads are bounded by [maxCacheBytes] and skipped
+  /// (not queued) when "Wi-Fi only" is on and the connection isn't Wi-Fi.
+  Future<bool> preloadEnabled();
+
+  Future<void> setPreloadEnabled(bool value);
 }

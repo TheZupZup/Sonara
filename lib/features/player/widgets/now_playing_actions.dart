@@ -2,27 +2,42 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/dimens.dart';
+import '../../../core/models/lyrics.dart';
 import '../../../core/models/track.dart';
+import '../../../data/repositories/favorites_repository_provider.dart';
 import '../../../shared/widgets/empty_state.dart';
+import '../favorites_providers.dart';
+import '../lyrics_providers.dart';
 import '../player_providers.dart';
 
 /// Bottom action row on the now-playing screen: favorite · queue · lyrics.
 ///
-/// Favorite and lyrics are honest placeholders — they give feedback but don't
-/// pretend to persist or fetch anything. Queue opens the live up-next list in a
-/// sheet, keeping the main screen artwork-focused.
+/// All three are live: favorite toggles a heart synced through the
+/// [FavoritesRepository] (to Jellyfin for remote tracks, on-device for local
+/// ones), queue opens the up-next list, and lyrics fetches the track's lyrics
+/// from the source — falling back to an honest "no lyrics" state when there are
+/// none (or for a local track / when signed out).
 class NowPlayingActions extends ConsumerWidget {
-  const NowPlayingActions({super.key});
+  const NowPlayingActions({super.key, required this.track});
+
+  final Track track;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final ThemeData theme = Theme.of(context);
+    final bool isFavorite = ref.watch(isFavoriteProvider(track.id));
+
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
       children: [
         IconButton(
-          onPressed: () => _comingSoon(context, 'Favorites are coming soon.'),
-          icon: const Icon(Icons.favorite_border),
-          tooltip: 'Favorite',
+          onPressed: () => ref
+              .read(favoritesRepositoryProvider)
+              .setFavorite(track, !isFavorite),
+          icon: Icon(isFavorite ? Icons.favorite : Icons.favorite_border),
+          color: isFavorite ? theme.colorScheme.primary : null,
+          isSelected: isFavorite,
+          tooltip: isFavorite ? 'Remove from favorites' : 'Favorite',
         ),
         IconButton(
           onPressed: () => _openQueue(context),
@@ -38,12 +53,6 @@ class NowPlayingActions extends ConsumerWidget {
     );
   }
 
-  void _comingSoon(BuildContext context, String message) {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message)));
-  }
-
   void _openQueue(BuildContext context) {
     showModalBottomSheet<void>(
       context: context,
@@ -57,16 +66,107 @@ class NowPlayingActions extends ConsumerWidget {
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
-      builder: (_) => const SafeArea(
+      isScrollControlled: true,
+      builder: (_) => _LyricsSheet(track: track),
+    );
+  }
+}
+
+/// The lyrics sheet: fetches the current track's lyrics and renders the lines,
+/// a calm "no lyrics" placeholder when there are none, or a friendly "couldn't
+/// load" line on a fetch failure.
+class _LyricsSheet extends ConsumerWidget {
+  const _LyricsSheet({required this.track});
+
+  final Track track;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final ThemeData theme = Theme.of(context);
+    final AsyncValue<Lyrics?> lyrics = ref.watch(trackLyricsProvider(track));
+
+    return SafeArea(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.sizeOf(context).height * 0.7,
+        ),
         child: Padding(
-          padding: EdgeInsets.only(bottom: AppSpacing.xl),
-          child: EmptyState(
-            icon: Icons.lyrics_outlined,
-            title: 'No lyrics available yet.',
-            message: 'Lyrics support is coming in a future update.',
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.lg,
+            0,
+            AppSpacing.lg,
+            AppSpacing.lg,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text('Lyrics', style: theme.textTheme.titleMedium),
+              const SizedBox(height: AppSpacing.sm),
+              Flexible(child: _content(lyrics)),
+            ],
           ),
         ),
       ),
+    );
+  }
+
+  Widget _content(AsyncValue<Lyrics?> lyrics) {
+    return lyrics.when(
+      loading: () => const Padding(
+        padding: EdgeInsets.symmetric(vertical: AppSpacing.xl),
+        child: Center(child: CircularProgressIndicator()),
+      ),
+      // Never surface raw error text (it can carry transport detail); show one
+      // calm, friendly line instead.
+      error: (_, __) => const Padding(
+        padding: EdgeInsets.symmetric(vertical: AppSpacing.lg),
+        child: EmptyState(
+          icon: Icons.lyrics_outlined,
+          title: "Couldn't load lyrics",
+          message: 'Check your connection and try again.',
+        ),
+      ),
+      data: (value) {
+        if (value == null || value.isEmpty) {
+          return const Padding(
+            padding: EdgeInsets.symmetric(vertical: AppSpacing.lg),
+            child: EmptyState(
+              icon: Icons.lyrics_outlined,
+              title: 'No lyrics available',
+              message: 'This track has no lyrics, or none are synced from your '
+                  'server yet.',
+            ),
+          );
+        }
+        return _LyricsList(lyrics: value);
+      },
+    );
+  }
+}
+
+class _LyricsList extends StatelessWidget {
+  const _LyricsList({required this.lyrics});
+
+  final Lyrics lyrics;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    return ListView.builder(
+      shrinkWrap: true,
+      itemCount: lyrics.lines.length,
+      itemBuilder: (context, index) {
+        final String text = lyrics.lines[index].text;
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+          // A blank line keeps its vertical rhythm rather than collapsing.
+          child: Text(
+            text.isEmpty ? ' ' : text,
+            style: theme.textTheme.bodyLarge,
+          ),
+        );
+      },
     );
   }
 }

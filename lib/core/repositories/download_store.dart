@@ -17,6 +17,7 @@ class CachedTrack {
     this.cachedAt,
     this.lastAccessedAt,
     this.pinned = false,
+    this.preloaded = false,
   });
 
   /// The catalog id of the cached track.
@@ -47,6 +48,13 @@ class CachedTrack {
   /// never evicted automatically and survive "clear unpinned".
   final bool pinned;
 
+  /// Whether this entry was *auto-preloaded* (prefetched ahead of play) rather
+  /// than explicitly downloaded by the user. Preloaded entries count toward the
+  /// cache budget but never appear as user downloads, and are evicted before any
+  /// user download when space is needed (see [CacheEvictionPolicy]). Cleared
+  /// when the user explicitly downloads the same track, promoting it.
+  final bool preloaded;
+
   /// Whether this record points at app-managed downloaded bytes (vs. an
   /// on-device track that is merely marked available offline).
   bool get isManaged => fileName != null && fileName!.isNotEmpty;
@@ -58,6 +66,7 @@ class CachedTrack {
     DateTime? cachedAt,
     DateTime? lastAccessedAt,
     bool? pinned,
+    bool? preloaded,
   }) {
     return CachedTrack(
       trackId: trackId,
@@ -67,6 +76,7 @@ class CachedTrack {
       cachedAt: cachedAt ?? this.cachedAt,
       lastAccessedAt: lastAccessedAt ?? this.lastAccessedAt,
       pinned: pinned ?? this.pinned,
+      preloaded: preloaded ?? this.preloaded,
     );
   }
 
@@ -80,6 +90,7 @@ class CachedTrack {
         if (lastAccessedAt != null)
           'lastAccessedAt': lastAccessedAt!.millisecondsSinceEpoch,
         if (pinned) 'pinned': true,
+        if (preloaded) 'preloaded': true,
       };
 
   /// Rebuilds a record from [toJson] output, or returns `null` when the track
@@ -100,6 +111,7 @@ class CachedTrack {
       cachedAt: _asDate(json['cachedAt']),
       lastAccessedAt: _asDate(json['lastAccessedAt']),
       pinned: json['pinned'] == true,
+      preloaded: json['preloaded'] == true,
     );
   }
 
@@ -125,7 +137,8 @@ class CachedTrack {
           other.sizeBytes == sizeBytes &&
           other.cachedAt == cachedAt &&
           other.lastAccessedAt == lastAccessedAt &&
-          other.pinned == pinned);
+          other.pinned == pinned &&
+          other.preloaded == preloaded);
 
   @override
   int get hashCode => Object.hash(
@@ -136,6 +149,7 @@ class CachedTrack {
         cachedAt,
         lastAccessedAt,
         pinned,
+        preloaded,
       );
 }
 

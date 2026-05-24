@@ -9,6 +9,7 @@ CachedTrack _managed(
   DateTime? accessed,
   DateTime? cached,
   bool pinned = false,
+  bool preloaded = false,
 }) {
   return CachedTrack(
     trackId: id,
@@ -17,6 +18,7 @@ CachedTrack _managed(
     lastAccessedAt: accessed,
     cachedAt: cached,
     pinned: pinned,
+    preloaded: preloaded,
   );
 }
 
@@ -148,6 +150,39 @@ void main() {
       // Only the managed remote track counts (100) and is the sole candidate.
       expect(plan.fits, isTrue);
       expect(plan.evict.map((e) => e.trackId), <String>['remote']);
+    });
+
+    test('evicts a preloaded track before any user download', () {
+      final plan = policy.plan(
+        cached: <CachedTrack>[
+          // The user download is older, but a preload is sacrificed first.
+          _managed('download', size: 100, accessed: DateTime(2024, 1, 1)),
+          _managed('preload', size: 100, accessed: DateTime(2024, 6, 1),
+              preloaded: true),
+        ],
+        incomingBytes: 100,
+        maxBytes: 250,
+      );
+
+      expect(plan.fits, isTrue);
+      expect(plan.evict.map((e) => e.trackId), <String>['preload']);
+    });
+
+    test('evicts older preloads first among several preloads', () {
+      final plan = policy.plan(
+        cached: <CachedTrack>[
+          _managed('p-new', size: 100, cached: DateTime(2024, 6, 1),
+              preloaded: true),
+          _managed('p-old', size: 100, cached: DateTime(2024, 1, 1),
+              preloaded: true),
+          _managed('download', size: 100, accessed: DateTime(2024, 1, 1)),
+        ],
+        incomingBytes: 100,
+        maxBytes: 250, // need to free 2 of 3
+      );
+
+      // Both preloads go (oldest first) before the user download is touched.
+      expect(plan.evict.map((e) => e.trackId), <String>['p-old', 'p-new']);
     });
 
     test('a re-download replaces its own copy rather than evicting others', () {
