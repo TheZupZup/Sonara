@@ -355,6 +355,11 @@ class CacheDownloadRepository
     // Preload is best-effort and network-heavy, so it honours "Wi-Fi only" and
     // simply skips (rather than queueing) when it can't run right now.
     if (!await _allowedToDownloadNow()) return;
+    // Respect the cache limit *before* spending data: if the cache is already
+    // full and nothing is safe to evict (every entry pinned or playing), a
+    // best-effort preload can never fit — skip the fetch rather than pull bytes
+    // we'd immediately discard. The exact fit is still re-checked at commit.
+    if (!_hasRoomForPrecache(await _preferences.maxCacheBytes())) return;
     try {
       final RemoteTrackData data = await _downloader.fetch(track);
       // Share the one commit lock so a preload write can't race a user
@@ -450,6 +455,28 @@ class CacheDownloadRepository
     await _changes.close();
     await _cacheChanges.close();
     await _progressChanges.close();
+  }
+
+  /// Whether a best-effort pre-cache could plausibly fit right now: either the
+  /// cache is below its limit, or there is at least one entry the policy could
+  /// evict (a prior pre-cache, or an unpinned download that isn't playing). When
+  /// the cache is full of pinned/playing tracks there is no room a pre-cache
+  /// could ever take, so the caller skips the fetch entirely. A cheap, in-memory
+  /// scan — the exact fit is decided by [CacheEvictionPolicy] at commit time.
+  bool _hasRoomForPrecache(int maxBytes) {
+    final String? protectId = _currentlyPlayingTrackId?.call();
+    int used = 0;
+    bool hasEvictable = false;
+    for (final CachedTrack c in _downloads.values) {
+      used += c.sizeBytes;
+      if (c.isManaged &&
+          c.sizeBytes > 0 &&
+          !c.pinned &&
+          c.trackId != protectId) {
+        hasEvictable = true;
+      }
+    }
+    return used < maxBytes || hasEvictable;
   }
 
   /// The connectivity gate. With "Wi-Fi only" off, anything goes; with it on,

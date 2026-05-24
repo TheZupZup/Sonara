@@ -10,8 +10,8 @@ import '../../core/services/local_playback_controller.dart';
 import '../../core/services/offline_first_playable_uri_resolver.dart';
 import '../../core/services/playable_uri_resolver.dart';
 import '../../core/services/playback_controller.dart';
-import '../../core/services/playback_preloader.dart';
 import '../../core/services/routing_playable_uri_resolver.dart';
+import '../../core/services/smart_precache_service.dart';
 import '../../core/sources/jellyfin/jellyfin_playable_uri_resolver.dart';
 import '../../data/repositories/download_repository_provider.dart';
 import '../settings/jellyfin/jellyfin_settings_controller.dart';
@@ -91,23 +91,24 @@ final playbackStateProvider = StreamProvider<PlaybackState>((ref) {
   return controller.stateStream;
 });
 
-/// Warms the next few queued tracks into the offline cache as playback moves,
-/// so upcoming songs play instantly and offline (bounded by the cache limit,
-/// and honouring "Wi-Fi only" / the preload preference).
+/// Smart pre-cache: warms the next few queued tracks into the offline cache as
+/// playback moves, so upcoming songs play instantly and offline (bounded by the
+/// cache limit, honouring "Wi-Fi only" and the user's smart-pre-cache on/off and
+/// count; calm under repeat-one).
 ///
 /// Pinned for the session like the controller: it reads the controller's state
 /// stream and the cache/prefs seams once with [Ref.read], so a rebuild of the
 /// download stores or preferences can't tear it down mid-session. It does its
 /// work as a side effect of listening, so `main` instantiates it once after
 /// startup; nothing in the UI reads its value.
-final playbackPreloaderProvider = Provider<PlaybackPreloader>((ref) {
-  final preloader = PlaybackPreloader(
+final smartPrecacheServiceProvider = Provider<SmartPrecacheService>((ref) {
+  final service = SmartPrecacheService(
     playbackStates: ref.read(playbackControllerProvider).stateStream,
     prefetcher: ref.read(trackPrefetcherProvider),
     preferences: ref.read(downloadPreferencesProvider),
   );
-  ref.onDispose(preloader.dispose);
-  return preloader;
+  ref.onDispose(service.dispose);
+  return service;
 });
 
 /// Production binding: lets the cache eviction policy see the currently playing

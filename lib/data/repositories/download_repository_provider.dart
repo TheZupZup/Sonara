@@ -94,10 +94,10 @@ final offlineCacheManagerProvider = Provider<OfflineCacheManager>((ref) {
   return ref.watch(_cacheDownloadRepositoryProvider);
 });
 
-/// The preload surface (warm an upcoming track ahead of play), backed by the
-/// *same* instance as [downloadRepositoryProvider] so preloads share the one
-/// cache limit and eviction policy with user downloads. Driven by the
-/// `PlaybackPreloader`, never by the UI directly.
+/// The pre-cache surface (warm an upcoming track ahead of play), backed by the
+/// *same* instance as [downloadRepositoryProvider] so pre-cached tracks share
+/// the one cache limit and eviction policy with user downloads. Driven by the
+/// `SmartPrecacheService`, never by the UI directly.
 final trackPrefetcherProvider = Provider<TrackPrefetcher>((ref) {
   return ref.watch(_cacheDownloadRepositoryProvider);
 });

@@ -56,11 +56,11 @@ Future<void> main() async {
     container.read(musicLibraryRepositoryProvider),
   );
 
-  // Start the upcoming-track preloader: as playback advances it warms the next
-  // queued tracks into the offline cache (under the same limit, honouring
-  // "Wi-Fi only" and the preload preference). Instantiating it wires the
-  // listener; it has no value the UI reads.
-  container.read(playbackPreloaderProvider);
+  // Start smart pre-cache: as playback advances it warms the next queued tracks
+  // into the offline cache (under the same limit, honouring "Wi-Fi only" and the
+  // user's smart-pre-cache on/off + count, and staying calm under repeat-one).
+  // Instantiating it wires the listener; it has no value the UI reads.
+  container.read(smartPrecacheServiceProvider);
 
   // Warm the persisted Jellyfin session before the first frame so a synced
   // remote track can stream on the first tap — without it, playback would race

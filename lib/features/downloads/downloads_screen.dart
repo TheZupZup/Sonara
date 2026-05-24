@@ -30,7 +30,6 @@ class DownloadsScreen extends ConsumerWidget {
         children: [
           _CacheUsageHeader(),
           _WifiOnlyToggle(),
-          _PreloadToggle(),
           Divider(height: 1),
           Expanded(child: _DownloadsBody()),
         ],
@@ -104,28 +103,6 @@ class _WifiOnlyToggle extends ConsumerWidget {
 
   void _set(WidgetRef ref, bool value) {
     ref.read(wifiOnlyControllerProvider.notifier).setWifiOnly(value);
-  }
-}
-
-class _PreloadToggle extends ConsumerWidget {
-  const _PreloadToggle();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final preload = ref.watch(preloadEnabledControllerProvider);
-    return SwitchListTile(
-      secondary: const Icon(Icons.bolt_outlined),
-      title: const Text('Preload upcoming tracks'),
-      subtitle: const Text(
-        'Cache the next few queued tracks ahead of play, within your limit',
-      ),
-      value: preload.valueOrNull ?? true,
-      onChanged: preload.isLoading ? null : (value) => _set(ref, value),
-    );
-  }
-
-  void _set(WidgetRef ref, bool value) {
-    ref.read(preloadEnabledControllerProvider.notifier).setEnabled(value);
   }
 }
 
