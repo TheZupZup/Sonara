@@ -161,7 +161,7 @@ class _NowPlaying extends ConsumerWidget {
           const SizedBox(height: AppSpacing.xs),
           PlaybackControls(state: state),
           const SizedBox(height: AppSpacing.sm),
-          const NowPlayingActions(),
+          NowPlayingActions(track: track),
         ],
       ),
     );

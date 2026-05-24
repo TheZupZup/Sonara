@@ -514,6 +514,105 @@ void main() {
       });
     });
 
+    group('preload (prefetch)', () {
+      test('caches a remote track without giving it a download status',
+          () async {
+        final repository = build();
+
+        await repository.prefetch(_jellyfin('j1'));
+
+        // Invisible as a download, but cached and counted toward usage.
+        expect(await repository.statusFor('j1'), DownloadStatus.notDownloaded);
+        expect(await repository.downloadedTrackIds(), isEmpty);
+        final CachedTrack saved = (await store.loadDownloads()).single;
+        expect(saved.trackId, 'j1');
+        expect(saved.preloaded, isTrue);
+        expect(saved.fileName, isNotNull);
+        expect((await repository.cacheSnapshot()).usedBytes, 4);
+      });
+
+      test('skips a local track (already on disk)', () async {
+        final repository = build();
+
+        await repository.prefetch(_local('a'));
+
+        expect(downloader.fetchCount, 0);
+        expect(await store.loadDownloads(), isEmpty);
+      });
+
+      test('skips a track that is already downloaded', () async {
+        final repository = build();
+        await repository.requestDownload(_jellyfin('j1'));
+        expect(downloader.fetchCount, 1);
+
+        await repository.prefetch(_jellyfin('j1'));
+
+        expect(downloader.fetchCount, 1);
+      });
+
+      test('is best-effort: a failed fetch caches nothing and never throws',
+          () async {
+        downloader = _FakeRemoteDownloader(error: Exception('boom'));
+        final repository = build();
+
+        await repository.prefetch(_jellyfin('j1'));
+
+        expect(await repository.statusFor('j1'), DownloadStatus.notDownloaded);
+        expect(await store.loadDownloads(), isEmpty);
+      });
+
+      test('respects "Wi-Fi only" and skips (without queueing) on mobile',
+          () async {
+        await preferences.setWifiOnly(true);
+        connectivity.status = NetworkStatus.mobile;
+        final repository = build();
+
+        await repository.prefetch(_jellyfin('j1'));
+
+        expect(downloader.fetchCount, 0);
+        expect(await repository.statusFor('j1'), DownloadStatus.notDownloaded);
+        expect(await store.loadDownloads(), isEmpty);
+      });
+
+      test('an explicit download promotes a preloaded copy without re-fetching',
+          () async {
+        final repository = build();
+        await repository.prefetch(_jellyfin('j1'));
+        expect(downloader.fetchCount, 1);
+
+        await repository.requestDownload(_jellyfin('j1'));
+
+        // Promoted in place: now a real download, still only one fetch total.
+        expect(await repository.statusFor('j1'), DownloadStatus.downloaded);
+        expect(downloader.fetchCount, 1);
+        expect((await store.loadDownloads()).single.preloaded, isFalse);
+      });
+
+      test('a preloaded track is evicted before a user download', () async {
+        // Room for two 4-byte entries; a third forces one out.
+        preferences = InMemoryDownloadPreferences(maxCacheBytes: 10);
+        final repository = CacheDownloadRepository(
+          store: store,
+          files: files,
+          downloader: downloader,
+          connectivity: connectivity,
+          preferences: preferences,
+        );
+        await repository.requestDownload(_jellyfin('keep')); // user download
+        await repository.prefetch(_jellyfin('warm')); // preload
+        await repository.requestDownload(_jellyfin('new')); // forces eviction
+
+        // The preload is sacrificed; the user download survives.
+        expect(await repository.statusFor('keep'), DownloadStatus.downloaded);
+        expect(await repository.statusFor('new'), DownloadStatus.downloaded);
+        final List<String> ids = (await store.loadDownloads())
+            .map((c) => c.trackId)
+            .toList()
+          ..sort();
+        expect(ids, <String>['keep', 'new']);
+      });
+    });
+
     group('manual cache controls', () {
       test('clear all removes every managed file and its metadata', () async {
         final spy = _SpyOfflineFileStore(files);

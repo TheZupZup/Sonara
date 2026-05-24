@@ -1,4 +1,5 @@
 import 'package:linthra/core/models/jellyfin_session.dart';
+import 'package:linthra/core/models/lyrics.dart';
 import 'package:linthra/core/sources/jellyfin/jellyfin_api.dart';
 import 'package:linthra/core/sources/jellyfin/jellyfin_client.dart';
 import 'package:linthra/core/sources/jellyfin/jellyfin_exception.dart';
@@ -45,6 +46,20 @@ class FakeJellyfinClient implements JellyfinClient {
   /// The last URL [probeStream] was asked about, so a test can prove the probe
   /// ran against the minted stream URL.
   Uri? lastProbedUrl;
+
+  /// Canned lyrics for [fetchLyrics]; `null` models "no lyrics" (a 404).
+  Lyrics? lyrics;
+  JellyfinException? lyricsError;
+  String? lastLyricsItemId;
+
+  /// Canned favourite ids for [fetchFavoriteIds] (also updated by [setFavorite]
+  /// so a round-trip reads back consistently).
+  Set<String> favoriteIds = <String>{};
+  JellyfinException? favoritesError;
+
+  /// Recorded favourite toggles in order, as (itemId, favorite) pairs.
+  final List<({String itemId, bool favorite})> favoriteCalls =
+      <({String itemId, bool favorite})>[];
 
   @override
   Future<JellyfinServerInfo> fetchServerInfo(String baseUrl) async {
@@ -112,5 +127,42 @@ class FakeJellyfinClient implements JellyfinClient {
     }
     return streamProbe ??
         const JellyfinStreamProbe(statusCode: 200, contentType: 'audio/mpeg');
+  }
+
+  @override
+  Future<Lyrics?> fetchLyrics(JellyfinSession session, String itemId) async {
+    lastLyricsItemId = itemId;
+    final JellyfinException? error = lyricsError;
+    if (error != null) {
+      throw error;
+    }
+    return lyrics;
+  }
+
+  @override
+  Future<Set<String>> fetchFavoriteIds(JellyfinSession session) async {
+    final JellyfinException? error = favoritesError;
+    if (error != null) {
+      throw error;
+    }
+    return favoriteIds;
+  }
+
+  @override
+  Future<void> setFavorite(
+    JellyfinSession session,
+    String itemId, {
+    required bool favorite,
+  }) async {
+    final JellyfinException? error = favoritesError;
+    if (error != null) {
+      throw error;
+    }
+    favoriteCalls.add((itemId: itemId, favorite: favorite));
+    if (favorite) {
+      favoriteIds = <String>{...favoriteIds, itemId};
+    } else {
+      favoriteIds = <String>{...favoriteIds}..remove(itemId);
+    }
   }
 }

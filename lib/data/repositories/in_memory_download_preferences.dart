@@ -6,11 +6,14 @@ class InMemoryDownloadPreferences implements DownloadPreferences {
   InMemoryDownloadPreferences({
     bool wifiOnly = false,
     int maxCacheBytes = CacheSize.defaultLimit,
+    bool preloadEnabled = true,
   })  : _wifiOnly = wifiOnly,
-        _maxCacheBytes = maxCacheBytes;
+        _maxCacheBytes = maxCacheBytes,
+        _preloadEnabled = preloadEnabled;
 
   bool _wifiOnly;
   int _maxCacheBytes;
+  bool _preloadEnabled;
 
   @override
   Future<bool> wifiOnly() async => _wifiOnly;
@@ -26,5 +29,13 @@ class InMemoryDownloadPreferences implements DownloadPreferences {
   @override
   Future<void> setMaxCacheBytes(int bytes) async {
     _maxCacheBytes = bytes;
+  }
+
+  @override
+  Future<bool> preloadEnabled() async => _preloadEnabled;
+
+  @override
+  Future<void> setPreloadEnabled(bool value) async {
+    _preloadEnabled = value;
   }
 }

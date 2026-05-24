@@ -11,6 +11,7 @@ class SharedPreferencesDownloadPreferences implements DownloadPreferences {
 
   static const String _wifiOnlyKey = 'downloads_wifi_only';
   static const String _maxCacheBytesKey = 'downloads_max_cache_bytes';
+  static const String _preloadEnabledKey = 'downloads_preload_enabled';
 
   @override
   Future<bool> wifiOnly() async {
@@ -36,5 +37,17 @@ class SharedPreferencesDownloadPreferences implements DownloadPreferences {
   Future<void> setMaxCacheBytes(int bytes) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt(_maxCacheBytesKey, CacheSize.clamp(bytes));
+  }
+
+  @override
+  Future<bool> preloadEnabled() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_preloadEnabledKey) ?? true;
+  }
+
+  @override
+  Future<void> setPreloadEnabled(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_preloadEnabledKey, value);
   }
 }

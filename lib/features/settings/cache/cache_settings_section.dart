@@ -46,9 +46,10 @@ class CacheSettingsSection extends ConsumerWidget {
             ),
             const SizedBox(height: AppSpacing.xs),
             Text(
-              'Downloads stay under your limit. When it fills, the '
-              'least-recently-played unpinned tracks are removed first — pinned '
-              'tracks and the track playing now are kept.',
+              'Downloads and preloaded upcoming tracks stay under your limit. '
+              'When it fills, preloaded then least-recently-played unpinned '
+              'tracks are removed first — pinned tracks and the track playing '
+              'now are kept.',
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
               ),

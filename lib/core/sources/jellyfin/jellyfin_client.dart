@@ -1,4 +1,5 @@
 import '../../models/jellyfin_session.dart';
+import '../../models/lyrics.dart';
 import 'jellyfin_api.dart';
 
 /// The single seam through which Linthra talks HTTP to a Jellyfin server.
@@ -55,4 +56,20 @@ abstract interface class JellyfinClient {
   /// carries the session token, so it must never be logged or placed in a
   /// thrown error.
   Future<JellyfinStreamProbe> probeStream(Uri url);
+
+  /// Fetches lyrics for the audio item [itemId], or `null` when the server has
+  /// none (a 404 — a normal outcome, not an error). Throws a [JellyfinException]
+  /// for transport or auth failures.
+  Future<Lyrics?> fetchLyrics(JellyfinSession session, String itemId);
+
+  /// The audio item ids the signed-in user has marked as favourites.
+  Future<Set<String>> fetchFavoriteIds(JellyfinSession session);
+
+  /// Marks (when [favorite]) or unmarks the audio item [itemId] as a favourite
+  /// for the signed-in user. Throws a [JellyfinException] on failure.
+  Future<void> setFavorite(
+    JellyfinSession session,
+    String itemId, {
+    required bool favorite,
+  });
 }

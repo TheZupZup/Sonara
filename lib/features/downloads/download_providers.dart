@@ -89,6 +89,26 @@ class WifiOnlyController extends AsyncNotifier<bool> {
 final wifiOnlyControllerProvider =
     AsyncNotifierProvider<WifiOnlyController, bool>(WifiOnlyController.new);
 
+/// Owns the "Preload upcoming tracks" switch: loads the persisted value and
+/// writes changes back through [DownloadPreferences]. When on, the player warms
+/// the next few queued tracks into the cache ahead of play.
+class PreloadEnabledController extends AsyncNotifier<bool> {
+  @override
+  Future<bool> build() {
+    return ref.read(downloadPreferencesProvider).preloadEnabled();
+  }
+
+  Future<void> setEnabled(bool value) async {
+    await ref.read(downloadPreferencesProvider).setPreloadEnabled(value);
+    state = AsyncData<bool>(value);
+  }
+}
+
+final preloadEnabledControllerProvider =
+    AsyncNotifierProvider<PreloadEnabledController, bool>(
+  PreloadEnabledController.new,
+);
+
 /// Production binding: makes Jellyfin tracks downloadable for offline use by
 /// wiring the remote downloader to the live signed-in source (read through
 /// [jellyfinMusicSourceProvider], so sign-in/out is picked up without a
