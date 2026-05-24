@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/models/cache_size.dart';
 import '../../core/models/download_progress.dart';
 import '../../core/models/track.dart';
+import '../../core/repositories/download_preferences.dart';
 import '../../core/repositories/download_repository.dart';
 import '../../core/repositories/download_store.dart';
 import '../../core/services/offline_cache_manager.dart';
@@ -157,10 +158,10 @@ class WifiOnlyController extends AsyncNotifier<bool> {
 final wifiOnlyControllerProvider =
     AsyncNotifierProvider<WifiOnlyController, bool>(WifiOnlyController.new);
 
-/// Owns the "Preload upcoming tracks" switch: loads the persisted value and
+/// Owns the "Smart pre-cache" on/off switch: loads the persisted value and
 /// writes changes back through [DownloadPreferences]. When on, the player warms
 /// the next few queued tracks into the cache ahead of play.
-class PreloadEnabledController extends AsyncNotifier<bool> {
+class SmartPrecacheEnabledController extends AsyncNotifier<bool> {
   @override
   Future<bool> build() {
     return ref.read(downloadPreferencesProvider).preloadEnabled();
@@ -172,9 +173,31 @@ class PreloadEnabledController extends AsyncNotifier<bool> {
   }
 }
 
-final preloadEnabledControllerProvider =
-    AsyncNotifierProvider<PreloadEnabledController, bool>(
-  PreloadEnabledController.new,
+final smartPrecacheEnabledProvider =
+    AsyncNotifierProvider<SmartPrecacheEnabledController, bool>(
+  SmartPrecacheEnabledController.new,
+);
+
+/// Owns the "Upcoming tracks to pre-cache" count: loads the persisted value and
+/// writes changes back through [DownloadPreferences], sanitized to one of
+/// [kPrecacheCountOptions] so it can never widen pre-caching beyond the offered
+/// choices.
+class PrecacheCountController extends AsyncNotifier<int> {
+  @override
+  Future<int> build() {
+    return ref.read(downloadPreferencesProvider).precacheCount();
+  }
+
+  Future<void> setCount(int value) async {
+    final int sanitized = sanitizePrecacheCount(value);
+    await ref.read(downloadPreferencesProvider).setPrecacheCount(sanitized);
+    state = AsyncData<int>(sanitized);
+  }
+}
+
+final precacheCountProvider =
+    AsyncNotifierProvider<PrecacheCountController, int>(
+  PrecacheCountController.new,
 );
 
 /// Production binding: makes Jellyfin tracks downloadable for offline use by

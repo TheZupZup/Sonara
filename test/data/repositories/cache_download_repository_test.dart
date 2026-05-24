@@ -781,6 +781,96 @@ void main() {
           ..sort();
         expect(ids, <String>['keep', 'new']);
       });
+
+      test('a repeated pre-cache for the same track does not fetch twice',
+          () async {
+        final repository = build();
+
+        await repository.prefetch(_jellyfin('j1'));
+        await repository.prefetch(_jellyfin('j1'));
+
+        // The second pre-cache bails on the already-cached guard before fetch.
+        expect(downloader.fetchCount, 1);
+        expect((await store.loadDownloads()).single.trackId, 'j1');
+      });
+
+      test(
+          'respects the cache limit: a pre-cache that cannot fit is skipped, '
+          'never throws, and evicts nothing protected', () async {
+        // Room for exactly one 4-byte track, already taken by a pinned
+        // ("Keep offline") download — nothing safe to evict.
+        preferences = InMemoryDownloadPreferences(maxCacheBytes: 4);
+        final repository = CacheDownloadRepository(
+          store: store,
+          files: files,
+          downloader: downloader,
+          connectivity: connectivity,
+          preferences: preferences,
+        );
+        await repository.requestDownload(_jellyfin('keep'));
+        await repository.setPinned('keep', true);
+        final int fetchesBefore = downloader.fetchCount;
+
+        // Best-effort: never throws, caches nothing, and skips the fetch
+        // entirely rather than spend data on bytes it would discard.
+        await repository.prefetch(_jellyfin('warm'));
+
+        expect(downloader.fetchCount, fetchesBefore);
+        expect(await repository.statusFor('keep'), DownloadStatus.downloaded);
+        expect(
+          (await store.loadDownloads()).map((c) => c.trackId),
+          <String>['keep'],
+        );
+        expect((await repository.cacheSnapshot()).usedBytes, 4);
+      });
+
+      test('evicts an older pre-cache to stay under the limit', () async {
+        // Room for one 4-byte entry; a second pre-cache forces the first out.
+        preferences = InMemoryDownloadPreferences(maxCacheBytes: 4);
+        final repository = CacheDownloadRepository(
+          store: store,
+          files: files,
+          downloader: downloader,
+          connectivity: connectivity,
+          preferences: preferences,
+        );
+
+        await repository.prefetch(_jellyfin('old'));
+        await repository.prefetch(_jellyfin('new'));
+
+        // The limit held: only the newest pre-cache remains, still invisible
+        // as a download.
+        expect((await repository.cacheSnapshot()).usedBytes, 4);
+        final List<CachedTrack> saved = await store.loadDownloads();
+        expect(saved.single.trackId, 'new');
+        expect(saved.single.preloaded, isTrue);
+        expect(await repository.downloadedTrackIds(), isEmpty);
+      });
+
+      test('a pre-cache never evicts the currently playing track', () async {
+        // Room for one 4-byte track, held by the currently playing track.
+        preferences = InMemoryDownloadPreferences(maxCacheBytes: 4);
+        final repository = CacheDownloadRepository(
+          store: store,
+          files: files,
+          downloader: downloader,
+          connectivity: connectivity,
+          preferences: preferences,
+          currentlyPlayingTrackId: () => 'now',
+        );
+        await repository.prefetch(_jellyfin('now'));
+        expect((await store.loadDownloads()).single.trackId, 'now');
+
+        // The only cached entry is the playing track (protected), so a new
+        // pre-cache is skipped — the playing track is never evicted.
+        await repository.prefetch(_jellyfin('next'));
+
+        expect(
+          (await store.loadDownloads()).map((c) => c.trackId),
+          <String>['now'],
+        );
+        expect((await repository.cacheSnapshot()).usedBytes, 4);
+      });
     });
 
     group('manual cache controls', () {

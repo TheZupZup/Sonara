@@ -1,5 +1,20 @@
 import '../models/cache_size.dart';
 
+/// The number-of-upcoming-tracks choices offered for smart pre-cache, shown in
+/// Settings. Small on purpose: enough for seamless playback without hoarding
+/// the cache or risking a "download the whole library" feel.
+const List<int> kPrecacheCountOptions = <int>[1, 3, 5, 10];
+
+/// How many upcoming tracks smart pre-cache warms when the user hasn't chosen.
+/// Modest by design — a few tracks ahead, never the whole queue.
+const int kDefaultPrecacheCount = 3;
+
+/// Clamps an arbitrary value to one of [kPrecacheCountOptions], so a corrupt or
+/// out-of-range stored value can never widen pre-caching beyond the offered
+/// choices. Returns [kDefaultPrecacheCount] when [value] isn't an offered count.
+int sanitizePrecacheCount(int value) =>
+    kPrecacheCountOptions.contains(value) ? value : kDefaultPrecacheCount;
+
 /// The user's download/offline preferences.
 ///
 /// These are kept behind an interface so the [DownloadRepository] and cache
@@ -8,6 +23,8 @@ import '../models/cache_size.dart';
 ///  - "Wi-Fi only": downloads that would run over mobile data are queued.
 ///  - "Max cache size": the byte ceiling the offline cache is kept under, with
 ///    least-recently-used eviction once a new download would exceed it.
+///  - Smart pre-cache "on/off" and "how many upcoming tracks": whether, and how
+///    far ahead, playback warms the next queued tracks into the cache.
 abstract interface class DownloadPreferences {
   /// Whether downloads should only run on Wi-Fi. Defaults to `false`.
   Future<bool> wifiOnly();
@@ -20,10 +37,17 @@ abstract interface class DownloadPreferences {
 
   Future<void> setMaxCacheBytes(int bytes);
 
-  /// Whether upcoming queued tracks are preloaded into the cache ahead of play.
-  /// Defaults to `true`. Preloads are bounded by [maxCacheBytes] and skipped
-  /// (not queued) when "Wi-Fi only" is on and the connection isn't Wi-Fi.
+  /// Whether smart pre-cache is on: upcoming queued tracks are warmed into the
+  /// cache ahead of play. Defaults to `true`. Pre-cached bytes are bounded by
+  /// [maxCacheBytes], skipped (not queued) when "Wi-Fi only" is on and the
+  /// connection isn't Wi-Fi, and evicted before any user download.
   Future<bool> preloadEnabled();
 
   Future<void> setPreloadEnabled(bool value);
+
+  /// How many upcoming tracks smart pre-cache warms ahead of the current one.
+  /// One of [kPrecacheCountOptions]; defaults to [kDefaultPrecacheCount].
+  Future<int> precacheCount();
+
+  Future<void> setPrecacheCount(int value);
 }

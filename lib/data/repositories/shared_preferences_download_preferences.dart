@@ -12,6 +12,7 @@ class SharedPreferencesDownloadPreferences implements DownloadPreferences {
   static const String _wifiOnlyKey = 'downloads_wifi_only';
   static const String _maxCacheBytesKey = 'downloads_max_cache_bytes';
   static const String _preloadEnabledKey = 'downloads_preload_enabled';
+  static const String _precacheCountKey = 'downloads_precache_count';
 
   @override
   Future<bool> wifiOnly() async {
@@ -49,5 +50,19 @@ class SharedPreferencesDownloadPreferences implements DownloadPreferences {
   Future<void> setPreloadEnabled(bool value) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_preloadEnabledKey, value);
+  }
+
+  @override
+  Future<int> precacheCount() async {
+    final prefs = await SharedPreferences.getInstance();
+    final int? stored = prefs.getInt(_precacheCountKey);
+    if (stored == null) return kDefaultPrecacheCount;
+    return sanitizePrecacheCount(stored);
+  }
+
+  @override
+  Future<void> setPrecacheCount(int value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_precacheCountKey, sanitizePrecacheCount(value));
   }
 }

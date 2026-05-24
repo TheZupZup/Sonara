@@ -901,9 +901,9 @@ user-controlled**:
   failing opaquely.
 - **The cache stays under a size limit.** You set a maximum (presets of 1, 2, 4,
   8, 16 GB or a custom value; **4 GB by default**), so Linthra never fills your
-  phone unexpectedly. Both your downloads **and** any preloaded upcoming tracks
-  (see below) count toward this one limit. When a new download would exceed it,
-  space is freed by removing **preloaded tracks first**, then the
+  phone unexpectedly. Both your downloads **and** any smart-pre-cached upcoming
+  tracks (see below) count toward this one limit. When a new download would
+  exceed it, space is freed by removing **pre-cached tracks first**, then the
   **least-recently-played, unpinned, not-currently-playing** downloads. Pin a
   track ("Keep offline") to protect it. If nothing safe can be freed, the
   download is refused with a friendly "not enough cache space" message instead of
@@ -913,16 +913,18 @@ user-controlled**:
 download an absent track, see a spinner while it's in flight, remove a cached
 one, or retry a failed one. The **Downloads** tab lists everything currently
 cached — with each track's **size** and a **Keep offline** pin — shows how much
-of the limit is in use, and hosts the **Wi-Fi only** and **Preload upcoming
-tracks** toggles. **Settings →
-Offline cache** shows used / max / free space and the **Change limit** and
-**Clear cache** (clear unpinned, or clear all) actions. The download lifecycle
-flows through `DownloadRepository`, which centralizes three guarantees:
+of the limit is in use, and hosts the **Wi-Fi only** toggle. **Settings → Smart
+pre-cache** turns automatic pre-caching on/off and sets how many upcoming tracks
+to warm (1, 3, 5, or 10); **Settings → Offline cache** shows used / max / free
+space and the **Change limit** and **Clear cache** (clear unpinned, or clear
+all) actions. The download lifecycle flows through `DownloadRepository`, which
+centralizes three guarantees:
 
 - **Downloads are user-initiated.** A track's *download status* only ever changes
-  in response to an explicit download/remove action. (Preloading, below, also
-  caches bytes automatically — but a preloaded track never takes on a download
-  status, never shows as a download, and is evicted before any download.)
+  in response to an explicit download/remove action. (Smart pre-cache, below,
+  also caches bytes automatically — but a pre-cached track never takes on a
+  download status, never shows as a download, and is evicted before any
+  download.)
 - **Source-aware.** A **Jellyfin** track has its bytes fetched (via
   `RemoteTrackDownloader` → `JellyfinTrackDownloader`) and written to an
   app-private offline directory (`OfflineFileStore`); an **on-device** track is
@@ -932,21 +934,31 @@ flows through `DownloadRepository`, which centralizes three guarantees:
   made off Wi-Fi is *queued* instead of run; with it off, downloads proceed on
   any connection. (Local tracks are never queued — there are no bytes to fetch.)
 
-**Preloading upcoming tracks.** As playback moves, Linthra warms the next few
-queued tracks into the same cache ahead of time, so the upcoming songs start
-instantly (and play offline) instead of buffering a fresh stream at each track
-change. A `PlaybackPreloader` watches `PlaybackState` and, when the playing
-track changes, asks a `TrackPrefetcher` (the `CacheDownloadRepository` again) to
-cache the next few `upNext` entries — which is the **queue order** in normal
-playback and the **shuffled order** when shuffle is on, since the controller
-keeps `upNext` in effective play order. It is deliberately well-behaved: only
-remote, not-yet-cached tracks are fetched; it **honours "Wi-Fi only"** (skipping
-rather than queueing off Wi-Fi); it stays under the cache limit and **evicts
-preloads before any download**; a preload that won't fit or fails is silently
-skipped (the track still streams when reached); and it never blocks or
-interrupts what's playing. Preloaded tracks count toward cache usage but never
-appear as downloads. Toggle it off with **Downloads → Preload upcoming tracks**
-(on by default).
+**Smart pre-cache.** As playback moves, Linthra warms a small number of upcoming
+queued tracks into the same cache ahead of time — the Plex/Plexamp-style "the
+next track is already here" feel — so upcoming songs start instantly (and play
+offline) instead of buffering a fresh stream at each track change, kept
+deliberately modest so it never fills your phone or downloads the whole library.
+A `SmartPrecacheService` watches the unified `PlaybackState` and, whenever the
+inputs that decide *what to cache* change (the playing track, the up-next list,
+shuffle, or repeat), asks a `TrackPrefetcher` (the `CacheDownloadRepository`
+again) to warm the next **N** `upNext` entries — which is the **queue order** in
+normal playback and the **shuffled order** when shuffle is on, since the
+controller keeps `upNext` in effective play order. The same applies while
+**casting**: the queue is always owned locally, so it pre-caches the active
+queue either way. It is deliberately well-behaved: only remote, not-yet-cached
+tracks are fetched, one at a time; it **honours "Wi-Fi only"** (skipping rather
+than queueing off Wi-Fi); it respects the cache limit *before* spending data
+(and **evicts pre-cached entries before any download**); a pre-cache that won't
+fit or fails is silently skipped (the track still streams when reached); and it
+never blocks or interrupts what's playing. Under **repeat-one** it stays calm —
+the current track loops, so the up-next won't play soon and isn't pre-cached.
+Pre-cached tracks count toward cache usage but never appear as downloads, and are
+the first to be evicted. Configure it in **Settings → Smart pre-cache**: an
+on/off switch (on by default) and the number of upcoming tracks to warm (1, 3,
+5, or 10; **3 by default**). Smart pre-cache is automatic and *evictable*; to
+keep a song for good, pin it with **Keep offline**, which is protected and never
+auto-evicted.
 
 **Storage & playback.** Downloaded bytes live in an app-controlled directory
 (`path_provider`'s application-support location, not the OS cache that can be
@@ -993,11 +1005,11 @@ Deliberate gaps the next PRs will close:
   out of scope for this PR. The seam is ready — `requestDownload(Track)` plus the
   `RemoteTrackDownloader` compose per-track — so a batch action is additive UI
   over the existing policy, with no architectural change.
-- **No background download manager.** Downloads (and preloads) run inline; there
-  is no worker, no Android download/notification service, no resume of a partial
-  transfer, and no auto-flush of the queue when Wi-Fi returns (re-tap a queued
-  track to retry). Preloading runs as a foreground side effect of playback, not a
-  scheduled background job.
+- **No background download manager.** Downloads (and smart pre-cache) run inline;
+  there is no worker, no Android download/notification service, no resume of a
+  partial transfer, and no auto-flush of the queue when Wi-Fi returns (re-tap a
+  queued track to retry). Smart pre-cache runs as a foreground side effect of
+  playback, not a scheduled background job.
 - **Eviction is inline, not a background sweeper.** Space is freed only when a
   new download needs it (and stale metadata only on load); there is no periodic
   reconciliation against the directory's actual on-disk size, and a remote track
@@ -1207,7 +1219,7 @@ branch rather than `main`.
 
 Later: Jellyfin (landed — settings, auth, encrypted session, a library source,
 Library sync, streaming playback, explicit per-track offline downloads,
-preloading of upcoming tracks, server-synced favourites, and lyrics;
+smart pre-cache of upcoming tracks, server-synced favourites, and lyrics;
 album/playlist "download all" and a background download manager next), Android
 Auto (foundation landed — browsable Library/Queue; album/artist grouping and
 search next), Chromecast/casting (real device discovery + connect/disconnect +
