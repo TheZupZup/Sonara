@@ -140,13 +140,12 @@ void main() {
         const AppDiagnosticsData(
           appVersion: '0.1.0',
           jellyfinState: 'connected',
-          jellyfinHost:
-              'https://user:hunter2@music.example.com/Audio/t1/stream'
-                  '?api_key=tok-secret',
+          jellyfinHost: 'https://user:hunter2@music.example.com/Audio/t1/stream'
+              '?api_key=tok-secret',
           subsonicState: 'connected',
           subsonicHost:
               'https://navi.example.com/rest/stream.view?u=bob&p=enc:abcdef'
-                  '&t=md5tok&s=salt123',
+              '&t=md5tok&s=salt123',
           lastErrorKind: 'unauthorized',
         ),
       );

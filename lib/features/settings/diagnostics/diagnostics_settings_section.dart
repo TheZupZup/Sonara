@@ -31,8 +31,7 @@ class _DiagnosticsSettingsSectionState
     if (_busy) return;
     setState(() => _busy = true);
     try {
-      final String report =
-          await ref.read(diagnosticsReportBuilderProvider)();
+      final String report = await ref.read(diagnosticsReportBuilderProvider)();
       await Clipboard.setData(ClipboardData(text: report));
       _showSnack('Diagnostics copied (no passwords, tokens, or URLs).');
     } finally {
@@ -44,8 +43,7 @@ class _DiagnosticsSettingsSectionState
     if (_busy) return;
     setState(() => _busy = true);
     try {
-      final String report =
-          await ref.read(diagnosticsReportBuilderProvider)();
+      final String report = await ref.read(diagnosticsReportBuilderProvider)();
       final Directory dir = await getApplicationDocumentsDirectory();
       final File file = File('${dir.path}/linthra-diagnostics.txt');
       await file.writeAsString(report, flush: true);
