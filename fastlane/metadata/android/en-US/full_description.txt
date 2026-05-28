@@ -1,46 +1,53 @@
-Linthra is an open-source, local-first music player for people who own their
-music. Your library lives on your device, and you stay in control of it.
+Linthra is an open-source, local-first music player for Android, for people who
+own their music. Point it at a folder of local files, or connect your own
+self-hosted Jellyfin, Navidrome, or Subsonic server — your library, your server,
+your rules.
 
-Linthra is early-stage software in its first alpha. The sections below clearly
-separate what works today from what is planned, so nothing here overpromises.
+Linthra is an unofficial community project. It is not affiliated with or
+endorsed by Jellyfin, Navidrome, or the Subsonic project; you bring your own
+server and credentials.
 
-What Linthra is about:
+This is early-alpha software. It is usable for testing on a real device, but it
+is not production-stable and has documented rough edges. The sections below
+separate what works today from what is still planned, so nothing here
+overpromises.
 
-* Local-first — your music files stay on your device; the app reads from a
-  local catalog rather than depending on a remote service.
-* User-owned music — Linthra plays the files you already have. There is no
-  store, no account, and no requirement to use anyone's cloud.
-* Privacy-focused — no telemetry and no forced sync. The app does not phone
-  home or upload your library, and offline downloads only ever happen when you
-  ask for them.
-* Open-source — released under the Mozilla Public License 2.0. Anyone can
-  read, audit, build, and contribute to the code.
+Privacy by design:
+
+* No tracking, no analytics, no ads, and no crash-reporting or telemetry SDK.
+* No account and no phoning home — nothing leaves your device unless you ask
+  for it.
+* Streaming is the default; offline downloads are always explicit and
+  user-initiated (Wi-Fi only unless you opt in to mobile data).
+* The server password is used once to obtain a session token, then discarded;
+  the token is stored encrypted and never logged.
+* Open-source under the Mozilla Public License 2.0 — anyone can read, audit,
+  build, and contribute to the code.
 
 Working today:
 
-* Pick a folder of music using the native Android folder picker, scan it, and
-  list your tracks. The chosen folder and the scanned catalog survive a
-  restart.
-* Play your local tracks, with an up-next queue.
+* Local library — pick a folder using the Storage Access Framework (no broad
+  storage permission), scan it, and browse Songs, Albums, and Artists with
+  search.
+* Self-hosted streaming from your own Jellyfin or Navidrome / Subsonic server:
+  test, sign in, sync, and stream, including over HTTPS.
+* Smart offline cache — tap to download tracks for offline play, with a size
+  limit and "Keep offline" pinning.
+* Queue / Up Next, playlists and favourites (synced with Jellyfin where
+  supported), and automatic "smart mixes" built from on-device signals.
 * Background playback with a media notification and lock-screen, Bluetooth, and
-  wired-headset controls.
-* Android Auto: browse your Library and Queue from the car screen.
-* Connect to your own Jellyfin server, sign in, sync your library, and stream
-  tracks. The session token is stored encrypted and passwords are never saved.
-* Explicit, user-initiated offline downloads of Jellyfin tracks, with a
-  "Wi-Fi only" option — never automatic.
+  wired-headset controls, plus shuffle / repeat and synced lyrics.
+* Android Auto browsing, and Cast to a Chromecast, speaker, or TV using a
+  pure-Dart Cast implementation — no Google Play Services.
 
 Planned (not finished yet):
 
-* Tag/metadata parsing and album artwork (tracks currently show file names).
-* Browsing by artist and album, plus search.
-* Playlist creation and editing, plus queue reorder/shuffle/repeat.
-* Album- and playlist-level "download all" and a background download manager.
-* Additional sources (such as WebDAV and NAS) behind the same interface.
+* Local tag/metadata parsing and album artwork (local files currently show
+  file names; "Unknown Artist/Album" until tags are read).
+* Subsonic favourites, lyrics, and cover art, and fuller playlist sync.
+* Album- and playlist-level "download all".
+* Additional sources such as WebDAV / NAS, behind the same interface.
+* Linux desktop, later, from the same codebase.
 
-Platforms:
-
-* Android first. Linux desktop is planned later, from the same codebase.
-
-Linthra is built to respect the people who use it: no lock-in, no surprise
-network activity, and no downloads you did not ask for.
+Distribution: Linthra is distributed for testing via GitHub Releases as a
+sideloadable APK, and is NOT yet on F-Droid or Google Play.
