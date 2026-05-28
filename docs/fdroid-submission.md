@@ -1,22 +1,21 @@
 # F-Droid submission package (draft)
 
-This document is the **submission package** for proposing Linthra to F-Droid: a
-ready-to-adapt merge-request description for
-[fdroiddata](https://gitlab.com/fdroid/fdroiddata), the build-recipe and
-version decisions, the verification status, the remaining blockers, and the
-exact next steps. It is a planning/preparation aid.
+This is the working material for proposing Linthra to F-Droid: a merge-request
+description you can adapt for [fdroiddata](https://gitlab.com/fdroid/fdroiddata),
+the build-recipe and version decisions, where verification stands, the remaining
+blockers, and the steps to actually submit.
 
-> **Linthra is NOT on F-Droid and NO submission/merge request has been made.**
-> Nothing here publishes, signs, or submits anything. This is the material to
-> review before a human opens a merge request to fdroiddata. Do not present
-> Linthra as accepted on, or available from, F-Droid.
+Linthra hasn't been submitted to F-Droid and isn't on it — this is the prep that
+comes before someone opens the merge request. Nothing here publishes or submits
+anything.
 
-See also: [fdroid-readiness.md](./fdroid-readiness.md) (overall checklist),
-[fdroid-build-recipe.md](./fdroid-build-recipe.md) (recipe/reproducibility),
-[dependency-license-audit.md](./dependency-license-audit.md) (licensing),
-[listing-assets.md](./listing-assets.md) (icon/graphic/screenshots),
-[release-process.md](./release-process.md) (versioning & tagging), and the draft
-recipe at [`metadata/io.github.thezupzup.linthra.yml`](../metadata/io.github.thezupzup.linthra.yml).
+Related docs: [fdroid-readiness.md](./fdroid-readiness.md) (the overall
+checklist), [fdroid-build-recipe.md](./fdroid-build-recipe.md) (recipe and
+reproducibility), [dependency-license-audit.md](./dependency-license-audit.md)
+(licensing), [listing-assets.md](./listing-assets.md) (icon, graphic,
+screenshots), [release-process.md](./release-process.md) (versioning and
+tagging), and the draft recipe at
+[`metadata/io.github.thezupzup.linthra.yml`](../metadata/io.github.thezupzup.linthra.yml).
 
 ## 1. App identity
 
@@ -29,169 +28,161 @@ recipe at [`metadata/io.github.thezupzup.linthra.yml`](../metadata/io.github.the
 | Issues  | https://github.com/thezupzup/linthra/issues |
 | Category| Multimedia                    |
 
-## 2. Target version — the latest WORKING alpha
+## 2. Target version: the latest working alpha
 
-F-Droid builds from a git tag, and Linthra now has tagged releases
-(`v0.1.0-alpha.1` … `v0.1.0-alpha.25`), each built by the Android Release Build
-workflow. The submission targets the **latest working** alpha:
+F-Droid builds from a git tag, and Linthra now has tags (`v0.1.0-alpha.1` …
+`v0.1.0-alpha.25`, built by the Android Release Build workflow). The submission
+targets the latest one that launches cleanly:
 
 | Item            | Value                                   |
 | --------------- | --------------------------------------- |
-| **Target tag**  | `v0.1.0-alpha.25` (commit `c9c1fb3`)     |
+| Target tag      | `v0.1.0-alpha.25` (commit `c9c1fb3`)     |
 | versionName     | `0.1.0-alpha.25`                        |
 | versionCode     | `100025`                                |
 | Changelog file  | `fastlane/metadata/android/en-US/changelogs/100025.txt` |
 
-> **Do NOT target `v0.1.0-alpha.24`.** Its GitHub Release is explicitly marked
-> **"Broken release — do not install … startup regression."** `v0.1.0-alpha.25`
-> is the hotfix that reverts that regression; it is the correct, launchable
-> target. The metadata `commit:` and `CurrentVersion`/`CurrentVersionCode` point
-> at alpha.25, never alpha.24.
+One thing to be careful about: don't target `v0.1.0-alpha.24`. Its GitHub
+Release is marked "Broken release — do not install … startup regression."
+alpha.25 is the hotfix that reverts it, so the recipe's `commit:` and the
+`CurrentVersion`/`CurrentVersionCode` all point at alpha.25.
 
-### Why versionCode `100025` (and not `15`)
+### Why versionCode `100025` and not `15`
 
-`pubspec.yaml` carries a **static** dev version, `0.1.0-alpha.15+15`, that is the
-same at every tagged commit (it does not track tags — the release workflow
-overrides it). Consequences:
+`pubspec.yaml` keeps a fixed dev version, `0.1.0-alpha.15+15`, that's the same at
+every tagged commit (the release workflow overrides it per release, so it never
+gets bumped). That has two consequences:
 
-- A plain `flutter build apk` at *any* tag produces versionName `0.1.0-alpha.15`
-  / versionCode **15**. F-Droid could not tell releases apart (every build would
-  be versionCode 15) — this is a hard blocker, not a cosmetic one.
-- The upstream **GitHub release** build derives the version from the tag via
-  `tool/version_from_tag.dart` (the single source of truth), giving
-  `v0.1.0-alpha.25` → `0.1.0-alpha.25` / **100025**.
+- A plain `flutter build apk` at any tag produces versionName `0.1.0-alpha.15`
+  and versionCode `15`. Every F-Droid build would then look like the same
+  version, which F-Droid can't work with — so this is a real blocker, not a
+  detail.
+- The upstream GitHub release build avoids that by deriving the version from the
+  tag with `tool/version_from_tag.dart` (the single source of truth):
+  `v0.1.0-alpha.25` → `0.1.0-alpha.25` / `100025`.
 
-**Decision:** the F-Droid recipe derives the version from the checked-out tag the
-same way (passing `--build-name`/`--build-number`), so the produced APK reports
-`0.1.0-alpha.25` / `100025` — matching the metadata and the GitHub channel. This:
+So the F-Droid recipe does the same thing — it derives the version from the
+checked-out tag and passes `--build-name`/`--build-number`. The APK then reports
+`0.1.0-alpha.25` / `100025`, matching the metadata and the GitHub build. That
+keeps each tag's versionCode distinct and increasing, keeps the F-Droid and
+GitHub codes identical for the same tag, and stays correct under `AutoUpdateMode`
+for future tags (since the version isn't hard-coded). The changelog file is
+named by that derived code (`100025.txt`), in line with
+[release-process.md §1](./release-process.md#1-versioning-model) (the older
+`1.txt`/`9.txt`/`15.txt` stay as they are).
 
-- gives each tag a distinct, strictly-monotonic versionCode (F-Droid can order
-  releases and offer updates);
-- keeps the F-Droid and GitHub versionCodes **identical** for the same tag (no
-  cross-channel inversion); and
-- stays correct under `AutoUpdateMode` for future tags (the build derives, rather
-  than hard-codes, the version).
-
-The changelog file is therefore named by the **derived** code (`100025.txt`),
-consistent with [release-process.md §1](./release-process.md#1-versioning-model)
-(the historical `1.txt`/`9.txt`/`15.txt` stay as-is).
-
-> **Alternative considered:** bump `pubspec.yaml`'s `version:` to the tag value
-> at each tagged commit, so a plain `flutter build` yields the right code and the
-> recipe needs no flags. That is cleaner long-term but changes the release
-> process (out of scope here), so the recipe-derives-from-tag approach is used
-> for the first submission.
+There's a cleaner long-term option — bump `pubspec.yaml` to the tag version at
+each tagged commit, so a plain build is correct and the recipe needs no flags —
+but that changes the release process, so it's out of scope here. The
+derive-from-tag approach works for this submission without touching anything.
 
 ## 3. Build recipe status
 
 The draft recipe is in
 [`metadata/io.github.thezupzup.linthra.yml`](../metadata/io.github.thezupzup.linthra.yml).
-Key properties (mapped to F-Droid's expectations):
+What makes it a good fit for building from source:
 
-- **Builds from source**, no signing keys required — F-Droid signs its own
-  builds; Linthra's release signing is optional and injected only on the GitHub
-  channel (see [release-signing.md](./release-signing.md)). No keystore/secret is
-  committed.
-- **Pinned toolchain:** Flutter `3.27.4` (stable), Dart `3.6.x`, JDK 17,
-  Gradle 8.3 — identical to `.flutter-version` and all CI workflows.
-- **No codegen prebuild:** the Drift output
-  `lib/data/database/linthra_database.g.dart` is committed, so no `build_runner`
-  step is needed.
-- **One native component:** SQLite via `sqlite3_flutter_libs`, compiled from
-  source (public domain). No prebuilt closed blobs; no Google Play Services /
-  Firebase anywhere in the resolved tree (152 packages audited).
-- **No GitHub Actions secrets / Play signing** are involved in the from-source
+- It builds with no signing keys — F-Droid signs its own builds. Linthra's
+  optional release signing only applies to the GitHub channel and is injected at
+  build time (see [release-signing.md](./release-signing.md)); no keystore or
+  secret is committed.
+- The toolchain is pinned: Flutter `3.27.4` (stable), Dart `3.6.x`, JDK 17,
+  Gradle 8.3 — the same versions as `.flutter-version` and CI.
+- No codegen step: the Drift output
+  `lib/data/database/linthra_database.g.dart` is committed, so there's no
+  `build_runner` to run.
+- One native component, SQLite via `sqlite3_flutter_libs`, built from source
+  (public domain). No prebuilt closed blobs, and no Google Play Services or
+  Firebase anywhere in the resolved tree (152 packages, all audited).
+- No GitHub Actions secrets or Play signing are involved in the from-source
   build.
 
-**To validate at submission time (draft caveats):**
+A few things still need checking against fdroiddata before submitting:
 
-1. **Flutter provisioning mechanism.** The draft provisions Flutter 3.27.4 via a
-   `sudo:` git-clone of `flutter/flutter` at the `3.27.4` tag. fdroiddata may
-   prefer its `flutter` **srclib** (`srclibs: [flutter@3.27.4]`, referenced as
-   `$$flutter$$`). Match whichever convention current fdroiddata Flutter recipes
-   use. Flutter's pinned engine artifacts are fetched at the pinned version —
-   standard for Flutter-on-F-Droid, and pinned/reproducible (not an uncontrolled
-   blob download).
-2. **`git describe` at the tag.** The build derives the version with
-   `git describe --tags --exact-match HEAD`; confirm F-Droid's checkout of
-   `commit: v0.1.0-alpha.25` leaves the tag resolvable (it should — F-Droid
-   checks out the tag ref).
-3. **Output path / ABI splitting.** `build/app/outputs/flutter-apk/app-release.apk`
-   is the single-APK output; if per-ABI splitting is preferred, adjust `output:`
-   accordingly.
-4. **`pubspec.lock` policy.** Still git-ignored; decide whether to commit it at
+1. How Flutter gets provisioned. The draft clones `flutter/flutter` at the
+   `3.27.4` tag in a `sudo:` step; fdroiddata may prefer its `flutter` srclib
+   (`srclibs: [flutter@3.27.4]`, referenced as `$$flutter$$`). Either is fine —
+   match the current convention. Flutter's engine artifacts are fetched at the
+   pinned version, which is normal for Flutter on F-Droid and stays pinned and
+   reproducible.
+2. The `git describe --tags --exact-match HEAD` the build uses to find the tag —
+   confirm F-Droid's checkout of `commit: v0.1.0-alpha.25` leaves the tag
+   resolvable (it should, since F-Droid checks out the tag ref).
+3. The output path. `build/app/outputs/flutter-apk/app-release.apk` is the
+   single-APK output; adjust `output:` if you'd rather split per ABI.
+4. The `pubspec.lock` policy — still git-ignored. Decide whether to commit it at
    the tagged commit for a fully pinned dependency set
    ([fdroid-build-recipe.md §4](./fdroid-build-recipe.md#4-reproducibility-notes)).
-5. **Gradle wrapper jar** is not committed; F-Droid restores it, but confirm the
-   recipe handles it (a `flutter build` provisions the wrapper).
+5. The Gradle wrapper jar isn't committed; F-Droid restores it, but confirm the
+   recipe handles that (a `flutter build` provisions the wrapper).
 
-## 4. Anti-feature assessment
+## 4. Anti-features
 
-Full reasoning in [fdroid-readiness.md §5](./fdroid-readiness.md#5-anti-features-review)
+The reasoning is in [fdroid-readiness.md §5](./fdroid-readiness.md#5-anti-features-review)
 and [dependency-license-audit.md §6](./dependency-license-audit.md#6-anti-features--non-free-check).
-Conclusion: **no anti-features to declare.**
+The short version: there's nothing to declare.
 
-| Anti-feature  | Apply? | One-line reason |
-| ------------- | ------ | --------------- |
-| Ads           | No  | No ad libraries/code anywhere. |
-| Tracking      | No  | No telemetry/analytics/crash SDK; on-device signals only; nothing auto-sent. |
-| NonFreeAdd    | No  | Promotes/installs no non-free add-ons. |
-| NonFreeDep    | No  | All 152 resolved packages permissive; playback is AndroidX Media3 (Apache-2.0); Cast is pure-Dart (no GMS Cast SDK). |
-| NonFreeNet    | No  | Local-first core needs no network; Jellyfin/Navidrome/Subsonic are optional, user-supplied, free-software servers — none bundled/promoted/required. |
-| UpstreamNonFree | No | Repo is entirely MPL-2.0; icons generated from a committed SVG. |
-| KnownVuln     | No  | No known-vulnerable version in the resolved tree at audit time; F-Droid's scanner re-checks. |
-| NoSourceSince | No  | Source fully published; builds from source. |
+| Anti-feature  | Apply? | Why |
+| ------------- | ------ | --- |
+| Ads           | No  | No ad libraries or code. |
+| Tracking      | No  | No telemetry/analytics/crash SDK; on-device signals only; nothing is auto-sent. |
+| NonFreeAdd    | No  | It promotes or installs no non-free add-ons. |
+| NonFreeDep    | No  | All 152 resolved packages are permissive; playback is AndroidX Media3 (Apache-2.0); Cast is pure-Dart, not the GMS Cast SDK. |
+| NonFreeNet    | No  | The local-first core needs no network; Jellyfin/Navidrome/Subsonic are optional, user-supplied, free-software servers — none bundled, promoted, or required. |
+| UpstreamNonFree | No | The repo is entirely MPL-2.0; the icons are generated from a committed SVG. |
+| KnownVuln     | No  | Nothing in the resolved tree was a known-vulnerable version at audit time; F-Droid's scanner re-checks. |
+| NoSourceSince | No  | The source is fully published and builds from source. |
 
-> **Re-review trigger:** any *future* online provider that defaults to or
-> promotes a non-free hosted service would need a fresh `NonFreeNet` assessment.
+Worth revisiting if a future online provider ever defaults to or promotes a
+non-free hosted service — that would need a fresh `NonFreeNet` look.
 
-## 5. Permissions summary
+## 5. Permissions
 
-Six permissions are declared explicitly in `AndroidManifest.xml`;
-`ACCESS_NETWORK_STATE` is merged in from the AndroidX Media3 AAR. The set is
-deliberately minimal — **no storage, location, contacts, camera, microphone, or
-phone permission, and no `MANAGE_EXTERNAL_STORAGE`** (folder access uses the
-Storage Access Framework). Each is justified in
+Six permissions are declared in `AndroidManifest.xml`, and `ACCESS_NETWORK_STATE`
+is merged in from the AndroidX Media3 AAR. The set is deliberately small — no
+storage, location, contacts, camera, microphone, or phone permission, and no
+`MANAGE_EXTERNAL_STORAGE` (folder access goes through the Storage Access
+Framework). Each one is explained in
 [fdroid-readiness.md §5 (Android permissions)](./fdroid-readiness.md#android-permissions):
 `INTERNET`, `ACCESS_NETWORK_STATE`, `FOREGROUND_SERVICE`,
-`FOREGROUND_SERVICE_MEDIA_PLAYBACK`, `POST_NOTIFICATIONS`, `WAKE_LOCK`,
-`CHANGE_WIFI_MULTICAST_STATE` (mDNS for Cast discovery; AOSP `NsdManager`, not
-GMS). The exact merged set should be re-confirmed against a release build's
-merged manifest at submission time.
+`FOREGROUND_SERVICE_MEDIA_PLAYBACK`, `POST_NOTIFICATIONS`, `WAKE_LOCK`, and
+`CHANGE_WIFI_MULTICAST_STATE` (mDNS for Cast discovery, via AOSP `NsdManager`,
+not GMS). Re-confirm the merged set against a release build's manifest before
+submitting.
 
-## 6. Listing assets status
+## 6. Listing assets
 
-Tracked in [listing-assets.md](./listing-assets.md). The real app **icon**
-(512×512) and **feature graphic** (1024×500) are committed (generated from
-`tool/branding/linthra_icon.svg`). **Screenshots are the only missing listing
-asset** — they must be captured from a real build, never mocked. Collection is
-already tracked by **issue #77** ("Add real app screenshots to the README and
-store metadata"), which lists the target screens (Now Playing, Library,
+Tracked in [listing-assets.md](./listing-assets.md). The app icon (512×512) and
+feature graphic (1024×500) are committed, generated from
+`tool/branding/linthra_icon.svg`. The one thing missing is screenshots, which
+need to be captured from a real build rather than mocked. That's already tracked
+by issue #77, which lists the screens to capture (Now Playing, Library,
 Settings → Jellyfin, Downloads, Cast, Android Auto) and the no-private-data rule.
-Screenshots are **not** strictly required for an fdroiddata MR, but are strongly
-recommended for the listing; capture before/soon after submitting.
+Screenshots aren't strictly required for the merge request, but they help the
+listing, so it's worth capturing them around the same time.
 
 ## 7. Verification status
 
-Run in this preparation pass (this environment has **no Flutter/Dart/Android SDK
-and no fdroidserver**, so app/build/lint checks could not run here):
+What ran in this prep pass, and what didn't. This environment has no Flutter,
+Dart, or Android SDK and no fdroidserver, so the app and build checks couldn't
+run here — they run in CI and need re-running on a proper machine before
+submitting.
 
 | Check | Status |
 | ----- | ------ |
-| Metadata YAML parses (PyYAML) | ✅ parses; fields/types as expected (Summary 57 chars ≤ 80; versionCode integer 100025). A plain YAML parse is **not** a full F-Droid schema check (see below). |
-| `flutter pub get` | ⏳ not run here (no toolchain). Run locally / in CI. |
-| `dart format --set-exit-if-changed .` | ⏳ not run here. CI (`ci.yml`) runs it on every PR. |
-| `flutter analyze` | ⏳ not run here. CI runs it on every PR. |
-| `flutter test` | ⏳ not run here. CI runs it on every PR. |
-| `flutter build apk --debug` | ⏳ not run here (no Android SDK). CI (`android-debug-apk.yml`) builds the debug APK on every PR. |
-| `flutter build apk --release` | ⏳ not run here. The tag build (`android-release-build.yml`) produced the alpha.25 release APK; re-confirm a clean from-source release build on an SDK-equipped machine. |
-| `fdroid lint` / `fdroid build -l io.github.thezupzup.linthra` | ⏳ not run here (no fdroidserver). Run inside an fdroiddata checkout (see §8). |
+| Metadata YAML parses (PyYAML) | Done here — valid YAML, fields and types as expected (Summary 57 chars, versionCode an integer, `100025`). This only checks the YAML, not F-Droid's schema (see below). |
+| `flutter pub get` | Not run here (no toolchain). Run locally / in CI. |
+| `dart format --set-exit-if-changed .` | Not run here. CI (`ci.yml`) runs it on every PR. |
+| `flutter analyze` | Not run here. CI runs it on every PR. |
+| `flutter test` | Not run here. CI runs it on every PR. |
+| `flutter build apk --debug` | Not run here (no Android SDK). CI (`android-debug-apk.yml`) builds it on every PR. |
+| `flutter build apk --release` | Not run here. The tag build (`android-release-build.yml`) produced the alpha.25 APK; re-confirm a clean from-source release build on a machine with the SDK. |
+| `fdroid lint` / `fdroid build -l io.github.thezupzup.linthra` | Not run here (no fdroidserver). Run inside an fdroiddata checkout (§8). |
 
-> **Do not treat the YAML parse as F-Droid validation.** It only confirms the
-> file is syntactically valid YAML with the expected fields. Real validation is
-> `fdroid lint` + an actual `fdroid build` in an fdroiddata checkout.
+A note on that first row: a YAML parse isn't the same as F-Droid validation. The
+real check is `fdroid lint` plus an actual `fdroid build` in an fdroiddata
+checkout.
 
-**Exact commands to run locally / in an fdroiddata checkout:**
+Commands to run locally and in an fdroiddata checkout:
 
 ```sh
 # In the Linthra repo (pinned Flutter 3.27.4 — see scripts/setup_flutter.sh):
@@ -202,94 +193,95 @@ flutter test
 flutter build apk --release \
   --build-name=0.1.0-alpha.25 --build-number=100025   # what the recipe derives
 
-# In an fdroiddata checkout, after copying metadata/io.github.thezupzup.linthra.yml in:
+# In an fdroiddata checkout, once metadata/io.github.thezupzup.linthra.yml is in:
 fdroid readmeta
 fdroid lint io.github.thezupzup.linthra
 fdroid build -v -l io.github.thezupzup.linthra        # full from-source build test
 ```
 
-## 8. Next steps to submit to fdroiddata
+## 8. Steps to submit to fdroiddata
 
-1. **Capture & commit screenshots** (issue #77) — recommended before submitting.
-2. **Re-confirm a clean `flutter build apk --release`** from source on an
-   SDK-equipped machine (and the merged-manifest permission set).
-3. **Fork** https://gitlab.com/fdroid/fdroiddata and create a branch.
-4. **Copy** `metadata/io.github.thezupzup.linthra.yml` into fdroiddata's
-   `metadata/` directory. In the real entry, drop the inline `Summary`/
-   `Description` (F-Droid pulls them from the Fastlane files) unless you
-   deliberately want to override them.
-5. **Finalize the Builds toolchain** to fdroiddata's current Flutter convention
-   (srclib vs. sudo-clone — §3) and run `fdroid lint` + `fdroid build -l` until
-   green (§7).
-6. **Open the merge request** using the description in §9. Mark it clearly as an
-   **early-alpha, pre-release** submission and confirm with reviewers whether
-   F-Droid will track an `-alpha` tag or wants to wait for a stable tag.
-7. **Do not** state Linthra is on F-Droid until the MR is merged and the build
-   publishes.
+1. Capture and commit screenshots (issue #77) — nice to have before submitting.
+2. Re-confirm a clean `flutter build apk --release` from source on a machine with
+   the Android SDK, and re-check the merged-manifest permission set.
+3. Fork https://gitlab.com/fdroid/fdroiddata and make a branch.
+4. Copy `metadata/io.github.thezupzup.linthra.yml` into fdroiddata's `metadata/`
+   directory. In the real entry you'd normally drop the inline `Summary`/
+   `Description` and let the Fastlane files provide them, unless you specifically
+   want to override them.
+5. Settle the Builds toolchain to fdroiddata's current Flutter convention
+   (srclib vs. sudo-clone — §3), and run `fdroid lint` + `fdroid build -l` until
+   they're green (§7).
+6. Open the merge request using the text in §9. Be upfront that it's an
+   early-alpha, pre-release submission, and ask the maintainers whether they're
+   happy tracking an `-alpha` tag or would rather wait for a stable one.
+7. Don't describe Linthra as being on F-Droid until the merge request is merged
+   and the build publishes.
 
 ## 9. Merge-request description (ready to adapt)
 
-> Paste into the fdroiddata MR. Honest, not overhyped.
+Paste this into the fdroiddata merge request and adjust as needed.
 
 ---
 
 **New app: Linthra — `io.github.thezupzup.linthra`**
 
-**Summary:** Local-first music player for your own self-hosted library.
+Linthra is an open-source Android music player for people who keep their music on
+their own devices or self-hosted servers. It plays local files and streams from
+self-hosted servers such as Jellyfin and Navidrome/Subsonic. It's an unofficial
+community client — not affiliated with Jellyfin, Navidrome, or Subsonic.
 
-**What it is.** Linthra is an open-source, local-first Android music player for
-people who own their music: play a local folder, or stream from your own
-self-hosted Jellyfin or Navidrome / Subsonic server. It is an **unofficial
-community project**, not affiliated with or endorsed by Jellyfin, Navidrome, or
-the Subsonic project.
+Why I think it's a good fit for F-Droid:
 
-**Why it fits F-Droid.**
-- **License:** MPL-2.0 (FSF/OSI-approved), declared in `LICENSE`.
-- **Builds from source**, no signing keys needed (F-Droid signs its own builds).
-- **No proprietary dependencies.** A full transitive audit (152 packages) found
-  only permissive licenses (BSD/MIT/Apache-2.0/MPL-2.0) and **no Google Play
-  Services / Firebase / analytics / ads / crash-reporting** package. The only
+- **License:** MPL-2.0 (FSF/OSI-approved), in `LICENSE`.
+- **Builds from source** with no signing keys — F-Droid signs its own builds.
+- **No proprietary dependencies.** I audited the full transitive tree (152
+  packages) and found only permissive licenses (BSD/MIT/Apache-2.0/MPL-2.0) and
+  no Google Play Services, Firebase, analytics, ads, or crash-reporting. The one
   native component is SQLite (public domain, built from source); playback is
-  AndroidX Media3 (Apache-2.0); Cast is a **pure-Dart** implementation (no GMS
-  Cast SDK).
-- **No anti-features.** No ads, no tracking/telemetry, nothing phones home. The
-  optional self-hosted sources are user-supplied free-software servers (none
-  bundled/promoted/required), so `NonFreeNet` does not apply.
-- **Minimal permissions.** No storage/location/contacts/camera/mic/phone
-  permission and no `MANAGE_EXTERNAL_STORAGE`; folder access uses the Storage
+  AndroidX Media3 (Apache-2.0); casting is a pure-Dart implementation, not the
+  GMS Cast SDK.
+- **No anti-features.** No ads, no tracking, nothing phones home. The self-hosted
+  sources are optional servers the user runs themselves, so I don't think
+  `NonFreeNet` applies — happy to add it if you read it differently.
+- **Minimal permissions.** No storage, location, contacts, camera, mic, or phone
+  permission, and no `MANAGE_EXTERNAL_STORAGE` — folder access uses the Storage
   Access Framework.
 
-**Source / tracker.** https://github.com/thezupzup/linthra (issues at `/issues`).
+Source and issues: https://github.com/thezupzup/linthra (issues at `/issues`).
 
-**Build target.** Tag `v0.1.0-alpha.25`, versionName `0.1.0-alpha.25`,
-versionCode `100025`. The build derives the version from the tag (the upstream
-single-source-of-truth `tool/version_from_tag.dart`), so the versionCode is
-distinct/monotonic per release and matches the upstream GitHub-release APK.
-(Note: `v0.1.0-alpha.24` was a withdrawn broken release; alpha.25 is the hotfix.)
+**Build target:** tag `v0.1.0-alpha.25`, versionName `0.1.0-alpha.25`,
+versionCode `100025`. The build derives the version from the tag (using the
+project's `tool/version_from_tag.dart`), so the versionCode is distinct and
+increasing per release and matches the upstream GitHub-release APK. (For context:
+`v0.1.0-alpha.24` was a broken release that's been withdrawn; alpha.25 is the
+hotfix.)
 
-**Status — honest scope.** This is **early-alpha, pre-release** software: usable
-for testing on a real device, not production-stable, with documented rough edges.
-It is currently distributed only via GitHub Releases (sideloaded APK). I'd
-welcome guidance on whether F-Droid prefers to track this `-alpha` tag now or
-wait for a first stable (`vX.Y.Z`) tag.
+**On status — being honest about scope:** this is early-alpha, pre-release
+software. It's usable for testing on a real device, but it isn't
+production-stable and has some documented rough edges, and right now it's only
+distributed as a sideloaded APK from GitHub Releases. I'd welcome your guidance
+on whether you'd prefer to track this `-alpha` tag now or wait for a first stable
+(`vX.Y.Z`) release.
 
-**Build verification.** `flutter analyze` / `flutter test` / formatting run green
-in CI on every PR, and CI builds a debug APK per PR; the tagged release APK
-builds via the release workflow. I will additionally run `fdroid lint` +
-`fdroid build -l` and confirm a clean from-source `flutter build apk --release`.
+**Build verification:** `flutter analyze`, `flutter test`, and formatting run
+green in CI on every PR, and CI builds a debug APK per PR; the tagged release APK
+builds via the release workflow. I'll also run `fdroid lint` and `fdroid build
+-l` and confirm a clean from-source `flutter build apk --release`.
 
-**Known limitations.** Early alpha; local files show file names until tag parsing
-lands; single Jellyfin server; some Subsonic features (favourites/lyrics/cover
-art) are follow-ups; screenshots are being captured from real builds.
+**Known limitations:** it's early alpha; local files show file names until tag
+parsing lands; one Jellyfin server at a time; some Subsonic features (favourites,
+lyrics, cover art) are still follow-ups; and screenshots are being captured from
+real builds.
 
 ---
 
 ## 10. GitHub issue draft — "Submit Linthra to F-Droid"
 
-> Body for a tracking issue in this repo. **Provided as a draft — not created
-> automatically.** A separate readiness issue (#87) and the screenshots issue
-> (#77) already exist; this one tracks the actual submission. Suggested labels:
-> `documentation`, `f-droid`.
+This is a draft body for a tracking issue in this repo. It isn't created
+automatically — file it if/when it's useful. A readiness issue (#87) and a
+screenshots issue (#77) already exist; this one would track the submission
+itself. Suggested labels: `documentation`, `f-droid`.
 
 **Title:** Submit Linthra to F-Droid
 
@@ -297,32 +289,33 @@ art) are follow-ups; screenshots are being captured from real builds.
 
 ### Overview
 
-Track the actual submission of Linthra to
-[fdroiddata](https://gitlab.com/fdroid/fdroiddata). This is **not** a claim that
-Linthra is on F-Droid — it is the submission work itself. Readiness groundwork is
-done (#87); this issue covers cutting the MR.
+Tracks the actual submission of Linthra to
+[fdroiddata](https://gitlab.com/fdroid/fdroiddata). This isn't a claim that
+Linthra is on F-Droid — it's the submission work itself. The readiness
+groundwork is done (#87); this covers cutting the merge request.
 
-The target is the latest **working** alpha, **`v0.1.0-alpha.25`** (versionCode
+The target is the latest alpha that launches, `v0.1.0-alpha.25` (versionCode
 `100025`) — the hotfix that supersedes the withdrawn, broken `v0.1.0-alpha.24`.
 
 ### Checklist
 
-- [ ] Capture & commit real screenshots (#77) — recommended before submitting.
-- [ ] Re-confirm a clean from-source `flutter build apk --release` on an
-      SDK-equipped machine; re-check the merged-manifest permission set.
-- [ ] Decide `pubspec.lock` policy for the tagged commit.
+- [ ] Capture and commit real screenshots (#77) — nice to have before
+      submitting.
+- [ ] Re-confirm a clean from-source `flutter build apk --release` on a machine
+      with the SDK; re-check the merged-manifest permissions.
+- [ ] Decide the `pubspec.lock` policy for the tagged commit.
 - [ ] Fork fdroiddata; copy in `metadata/io.github.thezupzup.linthra.yml`.
-- [ ] Finalize the Builds toolchain to fdroiddata's Flutter convention
-      (srclib vs. sudo-clone).
+- [ ] Settle the Builds toolchain to fdroiddata's Flutter convention (srclib vs.
+      sudo-clone).
 - [ ] `fdroid readmeta` + `fdroid lint` + `fdroid build -l` all green.
-- [ ] Open the MR (description in `docs/fdroid-submission.md` §9); flag the
-      early-alpha / pre-release status and ask about `-alpha` tag tracking.
+- [ ] Open the merge request (text in `docs/fdroid-submission.md` §9); mention
+      the early-alpha status and ask about tracking an `-alpha` tag.
 
-### Blockers / open questions
+### Open questions
 
-- F-Droid's stance on tracking a **pre-release `-alpha`** CurrentVersion (vs.
-  waiting for a stable tag) — judgement call to confirm with reviewers.
-- Final Flutter-on-F-Droid build incantation must be validated in an fdroiddata
+- Whether F-Droid will track a pre-release `-alpha` CurrentVersion, or would
+  rather wait for a stable tag — one to raise with the maintainers.
+- The exact Flutter-on-F-Droid build setup, to be confirmed in an fdroiddata
   checkout.
 
 ### Links
@@ -334,9 +327,9 @@ The target is the latest **working** alpha, **`v0.1.0-alpha.25`** (versionCode
 - Dependency/license audit: `docs/dependency-license-audit.md`
 - Listing assets: `docs/listing-assets.md`
 
-### Current status
+### Status
 
-Metadata, audit, permissions, anti-feature review, build recipe, and submission
-text are prepared and target `v0.1.0-alpha.25`. Remaining before the MR:
-screenshots, an SDK-machine release-build re-confirmation, and `fdroid lint` /
-`fdroid build` validation in an fdroiddata checkout.
+The metadata, audit, permissions, anti-feature review, build recipe, and
+submission text are ready and point at `v0.1.0-alpha.25`. What's left before the
+merge request: screenshots, an SDK-machine release-build re-confirmation, and
+`fdroid lint` / `fdroid build` in an fdroiddata checkout.

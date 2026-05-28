@@ -4,34 +4,33 @@ This document tracks what Linthra needs before it can be submitted to
 [F-Droid](https://f-droid.org/). It is a planning aid, not a claim of
 availability.
 
-> **Linthra is _not_ on F-Droid, and no submission has been made.** This
-> checklist exists so that a future submission is straightforward and accurate.
+> Linthra isn't on F-Droid, and nothing has been submitted yet. This checklist is
+> here so that when we do submit, it's accurate and goes smoothly.
 
 ## 1. Current status
 
-- **Stage:** early **alpha**, usable for testing on a real device. Working
-  today: local-folder library (SAF scan + browse), self-hosted streaming from
-  Jellyfin and Navidrome/Subsonic, smart offline cache, queue, playlists &
-  favourites, smart mixes, background playback (media notification / lock screen
-  / Bluetooth), Android Auto, and Cast (pure-Dart, no Google Play Services). Not
-  production-stable; documented rough edges remain.
-- **Distribution:** GitHub Releases only (sideloaded APK / Obtainium). **No
-  F-Droid metadata has been submitted, and Linthra is not on F-Droid.**
+- **Stage:** early alpha, usable for testing on a real device. Working today:
+  local-folder library (SAF scan and browse), streaming from Jellyfin and
+  Navidrome/Subsonic, a smart offline cache, queue, playlists and favourites,
+  smart mixes, background playback (media notification / lock screen /
+  Bluetooth), Android Auto, and Cast (pure-Dart, no Google Play Services). It
+  isn't production-stable, and the rough edges are documented.
+- **Distribution:** GitHub Releases only, as a sideloaded APK (Obtainium works
+  too). No F-Droid metadata has been submitted, and Linthra isn't on F-Droid.
 - **Tagged releases now exist:** `v0.1.0-alpha.1` … `v0.1.0-alpha.25`, each built
-  by `.github/workflows/android-release-build.yml`. The **F-Droid target is the
-  latest working alpha, `v0.1.0-alpha.25`** (versionName `0.1.0-alpha.25`,
-  tag-derived versionCode `100025`). **`v0.1.0-alpha.24` is a withdrawn, broken
-  release** (its GitHub Release says "Broken release — do not install … startup
-  regression"); `alpha.25` is the hotfix that reverts it and **must** be the
-  target instead.
-- **Groundwork in place:** stable application ID, MPL-2.0 license, a real
-  Linthra app/launcher icon, Fastlane-style store metadata under
-  `fastlane/metadata/android/en-US/` (text + real icon and feature graphic;
-  screenshots still pending), a completed dependency/license audit, a draft
-  F-Droid recipe at [`metadata/io.github.thezupzup.linthra.yml`](../metadata/io.github.thezupzup.linthra.yml)
-  pinned to `v0.1.0-alpha.25`, and the submission package (MR text, next steps)
-  at [`docs/fdroid-submission.md`](./fdroid-submission.md).
-- **Not yet submitted.** See [Remaining blockers](#8-remaining-blockers-before-submission).
+  by `.github/workflows/android-release-build.yml`. The F-Droid target is the
+  latest one that launches, `v0.1.0-alpha.25` (versionName `0.1.0-alpha.25`,
+  tag-derived versionCode `100025`). Skip `v0.1.0-alpha.24`: its GitHub Release
+  is marked "Broken release — do not install … startup regression", and alpha.25
+  is the hotfix that reverts it.
+- **Groundwork in place:** a stable application ID, the MPL-2.0 license, a real
+  app/launcher icon, Fastlane-style store metadata under
+  `fastlane/metadata/android/en-US/` (text plus the real icon and feature
+  graphic; screenshots still to come), a finished dependency/license audit, the
+  draft recipe at [`metadata/io.github.thezupzup.linthra.yml`](../metadata/io.github.thezupzup.linthra.yml)
+  (pinned to `v0.1.0-alpha.25`), and the submission package at
+  [`docs/fdroid-submission.md`](./fdroid-submission.md).
+- **Not submitted yet.** See [Remaining blockers](#8-remaining-blockers-before-submission).
 
 ## 2. App identity
 
@@ -218,18 +217,17 @@ including the GitHub-Release flow — is in
 5. The F-Droid recipe should use `AutoUpdateMode`/`UpdateCheckMode` tied to tags
    so new tagged releases are picked up.
 
-> **F-Droid caveat — resolved in the draft recipe.** F-Droid builds **from
-> source** at the tag and does **not** run our release workflow, so a plain
-> `flutter build` there would take the version from `pubspec.yaml`
-> (`0.1.0-alpha.15+15`), giving versionCode **15 for every tag** — F-Droid could
-> not tell releases apart. The draft recipe therefore **derives the version from
-> the checked-out tag** with `tool/version_from_tag.dart` and passes
-> `--build-name`/`--build-number`, so `v0.1.0-alpha.25` builds to
-> `0.1.0-alpha.25` / **100025** — the same value the GitHub-Release build bakes
-> in, distinct and monotonic per tag, and correct under `AutoUpdateMode` for
-> future tags. (The alternative — bumping `pubspec.yaml` at each tagged commit —
-> is cleaner long-term but changes the release process; see
-> [docs/fdroid-submission.md §2](./fdroid-submission.md).)
+> **How the F-Droid build gets the right version.** F-Droid builds from source at
+> the tag and doesn't run our release workflow, so a plain `flutter build` there
+> would read the version from `pubspec.yaml` (`0.1.0-alpha.15+15`) and label every
+> tag as versionCode 15 — which F-Droid can't tell apart. The draft recipe avoids
+> that by deriving the version from the checked-out tag with
+> `tool/version_from_tag.dart` and passing `--build-name`/`--build-number`, so
+> `v0.1.0-alpha.25` builds to `0.1.0-alpha.25` / `100025` — the same value the
+> GitHub release build uses, distinct and increasing per tag, and still correct
+> under `AutoUpdateMode` for future tags. (Bumping `pubspec.yaml` at each tagged
+> commit would also work and is cleaner long-term, but it changes the release
+> process; see [docs/fdroid-submission.md §2](./fdroid-submission.md).)
 
 ## 7. Metadata checklist
 
